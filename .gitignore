@@ -39,6 +39,9 @@ yarn-error.log*
 # claude code
 .claude/
 
+# openf1 disk cache
+.cache/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

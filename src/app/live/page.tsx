@@ -19,13 +19,14 @@ import { SessionReplay } from "@/components/live/session-replay";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils/cn";
-import type { Meeting, Session } from "@/lib/openf1/types";
+import type { Session } from "@/lib/openf1/types";
 
 const RACE_SESSION_TYPES = new Set([
   "Race",
   "Sprint",
   "Qualifying",
   "Sprint Qualifying",
+  "Sprint Shootout",
   "Practice",
 ]);
 
@@ -56,24 +57,27 @@ export default function SessionAnalysisPage() {
     setReplayTime(time);
   }, []);
 
-  const { data: meetings, isLoading: meetingsLoading } = useMeetings(year);
+  const { data: meetings, isLoading: meetingsLoading, error: meetingsError } = useMeetings(year);
   const { data: sessions, isLoading: sessionsLoading } = useSessions(meetingKey);
 
-  // Filter to completed meetings (sorted most recent first)
-  const completedMeetings = useMemo(() => {
+  // Detect OpenF1 live-session lockout
+  const apiRestricted = meetingsError?.message?.includes("Live F1 session")
+    || meetingsError?.message?.includes("restricted")
+    || false;
+
+  // All meetings for the dropdown (sorted most recent first)
+  const sortedMeetings = useMemo(() => {
     if (!meetings) return [];
-    return [...meetings]
-      .filter((m) => isPast(parseISO(m.date_start)))
-      .sort(
-        (a, b) =>
-          parseISO(b.date_start).getTime() - parseISO(a.date_start).getTime()
-      );
+    return [...meetings].sort(
+      (a, b) =>
+        parseISO(b.date_start).getTime() - parseISO(a.date_start).getTime()
+    );
   }, [meetings]);
 
-  // Filter sessions to race session types
-  const raceSessions = useMemo(() => {
+  // Sessions for the dropdown — show all session types so users can pick freely
+  const availableSessions = useMemo(() => {
     if (!sessions) return [];
-    return sessions.filter((s) => RACE_SESSION_TYPES.has(s.session_type));
+    return sessions;
   }, [sessions]);
 
   // Auto-select latest completed GP meeting on first load
@@ -100,7 +104,6 @@ export default function SessionAnalysisPage() {
       // Only testing sessions completed — try previous year
       if (year > 2023) {
         setYear(year - 1);
-        // Don't set autoSelected so the effect re-runs with the new year's data
         return;
       }
       setMeetingKey(completed[0].meeting_key);
@@ -125,20 +128,29 @@ export default function SessionAnalysisPage() {
     setMeetingKey(null);
     setSessionKey(null);
     setAutoSelected(false);
+    setReplayTime(null);
+    setViewMode("timing");
   }
 
   // Reset session when meeting changes
   function handleMeetingChange(newMeetingKey: number) {
     setMeetingKey(newMeetingKey);
     setSessionKey(null);
+    setReplayTime(null);
+  }
+
+  // Reset replay time when session changes
+  function handleSessionChange(newSessionKey: number) {
+    setSessionKey(newSessionKey);
+    setReplayTime(null);
   }
 
   // Fetch timing data for selected session
-  const { data: positions } = usePositions(sessionKey);
-  const { data: intervals } = useIntervals(sessionKey, false);
+  const { data: positions, error: posErr } = usePositions(sessionKey);
+  const { data: intervals, error: intErr } = useIntervals(sessionKey, false);
   const { data: stints } = useStints(sessionKey);
-  const { data: laps } = useLaps(sessionKey);
-  const { data: drivers } = useDrivers(sessionKey);
+  const { data: laps, error: lapErr } = useLaps(sessionKey);
+  const { data: drivers, error: drvErr } = useDrivers(sessionKey);
   const { data: raceControl } = useRaceControl(sessionKey, false);
 
   const timingEntries =
@@ -148,8 +160,10 @@ export default function SessionAnalysisPage() {
 
   // Filtered data for replay mode sidebar
   const replayTimingEntries = useMemo(() => {
-    if (!replayTime || !drivers || !positions || !intervals || !stints || !laps)
-      return [];
+    if (!drivers || !positions || !intervals || !stints || !laps) return [];
+    // Show full timing data while replay hasn't reported a time yet
+    if (replayTime === null)
+      return buildTimingData(drivers, positions, intervals, stints, laps);
     const cutoff = new Date(replayTime).toISOString();
     const filteredPositions = positions.filter((p) => p.date <= cutoff);
     const filteredIntervals = intervals.filter((i) => i.date <= cutoff);
@@ -181,8 +195,10 @@ export default function SessionAnalysisPage() {
   }, [replayTime, raceControl]);
 
   const dataLoading = sessionKey && (!positions || !intervals || !drivers);
+  const dataError = posErr || intErr || drvErr || lapErr;
+  const dataUnavailable = sessionKey && !dataLoading && dataError && !positions;
 
-  const selectedSession = raceSessions.find(
+  const selectedSession = availableSessions.find(
     (s) => s.session_key === sessionKey
   );
 
@@ -197,6 +213,15 @@ export default function SessionAnalysisPage() {
         }
       />
 
+      {/* API restriction banner */}
+      {apiRestricted && (
+        <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200">
+          <span className="font-semibold">Live session in progress</span> — OpenF1
+          restricts free API access during live F1 sessions. Data will load once the
+          session ends. Previously cached data may still be available.
+        </div>
+      )}
+
       {/* Session picker */}
       <div className="flex flex-wrap items-center gap-3">
         <SeasonSelector value={year} onChange={handleYearChange} />
@@ -204,11 +229,11 @@ export default function SessionAnalysisPage() {
         <select
           value={meetingKey ?? ""}
           onChange={(e) => handleMeetingChange(Number(e.target.value))}
-          disabled={meetingsLoading || completedMeetings.length === 0}
+          disabled={meetingsLoading || sortedMeetings.length === 0}
           className={selectClasses}
         >
           {!meetingKey && <option value="">Select race weekend…</option>}
-          {completedMeetings.map((m) => (
+          {sortedMeetings.map((m) => (
             <option key={m.meeting_key} value={m.meeting_key}>
               {m.meeting_name}
             </option>
@@ -217,12 +242,12 @@ export default function SessionAnalysisPage() {
 
         <select
           value={sessionKey ?? ""}
-          onChange={(e) => setSessionKey(Number(e.target.value))}
-          disabled={!meetingKey || sessionsLoading || raceSessions.length === 0}
+          onChange={(e) => handleSessionChange(Number(e.target.value))}
+          disabled={!meetingKey || sessionsLoading || availableSessions.length === 0}
           className={selectClasses}
         >
           {!sessionKey && <option value="">Select session…</option>}
-          {raceSessions.map((s) => (
+          {availableSessions.map((s) => (
             <option key={s.session_key} value={s.session_key}>
               {s.session_name}
             </option>
@@ -274,8 +299,20 @@ export default function SessionAnalysisPage() {
         />
       )}
 
+      {/* Data unavailable (API locked) */}
+      {dataUnavailable && (
+        <EmptyState
+          title="Session data unavailable"
+          description={
+            apiRestricted
+              ? "OpenF1 restricts API access during live sessions. Timing data will load once the live session ends — try refreshing later."
+              : "Could not load timing data for this session. Try refreshing the page."
+          }
+        />
+      )}
+
       {/* Timing board + race control */}
-      {sessionKey && viewMode === "timing" && (
+      {sessionKey && viewMode === "timing" && !dataUnavailable && (
         <div className="grid gap-6 lg:grid-cols-[1fr_350px]">
           <div className="space-y-4">
             {dataLoading ? (
@@ -305,7 +342,7 @@ export default function SessionAnalysisPage() {
       )}
 
       {/* Replay mode */}
-      {sessionKey && viewMode === "replay" && (
+      {sessionKey && viewMode === "replay" && !dataUnavailable && (
         <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
           <div>
             {drivers && laps ? (

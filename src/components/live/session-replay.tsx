@@ -83,15 +83,29 @@ export function SessionReplay({
   }, [useLapSkips, currentLap, totalLaps, replay.currentTime, phases]);
 
   // Throttled time reporting to parent (~2 updates/sec for sidebar sync)
+  // Uses trailing-edge fallback so the latest value is always delivered,
+  // even when the replay is paused or data loads within the throttle window.
   const lastReportRef = useRef(0);
   useEffect(() => {
-    if (!onTimeChange) return;
+    if (!onTimeChange || !processedData) return;
+
     const now = performance.now();
+
     if (now - lastReportRef.current >= 500) {
       lastReportRef.current = now;
       onTimeChange(replay.currentTime);
+      return;
     }
-  }, [replay.currentTime, onTimeChange]);
+
+    // Schedule a trailing call so we never permanently drop an update
+    const remaining = 500 - (now - lastReportRef.current);
+    const timerId = setTimeout(() => {
+      lastReportRef.current = performance.now();
+      onTimeChange(replay.currentTime);
+    }, remaining);
+
+    return () => clearTimeout(timerId);
+  }, [replay.currentTime, onTimeChange, processedData]);
 
   if (isLoading) {
     const pct = progress.total > 0

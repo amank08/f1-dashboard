@@ -19,9 +19,9 @@ async function fetchWithRetry(
 
 /**
  * Fetches location data for all drivers in a session.
- * The OpenF1 location endpoint requires a driver_number filter,
- * so we fetch in small batches of 3 with delays between batches
- * to avoid hitting OpenF1's rate limits.
+ * All drivers are fetched in parallel — the server-side proxy handles
+ * rate limiting and caching (7-day TTL), so cached requests return
+ * instantly without hitting OpenF1.
  */
 export function useLocationData(
   sessionKey: number | null,
@@ -55,42 +55,31 @@ export function useLocationData(
 
     async function fetchAll() {
       try {
-        const batchSize = 3;
-        const allSamples: LocationSample[] = [];
-        let loaded = 0;
+        let completedCount = 0;
 
-        for (let i = 0; i < nums.length; i += batchSize) {
-          if (cancelled) return;
-
-          // Small delay between batches (not before the first)
-          if (i > 0) {
-            await new Promise((r) => setTimeout(r, 1500));
-          }
-          if (cancelled) return;
-
-          const batch = nums.slice(i, i + batchSize);
-          const results = await Promise.all(
-            batch.map(async (driverNum) => {
+        const results = await Promise.all(
+          nums.map(async (driverNum) => {
+            try {
               const res = await fetchWithRetry(
                 `/api/f1/location?session_key=${sessionKey}&driver_number=${driverNum}`
               );
               if (!res.ok) {
                 if (res.status === 422) return [];
-                throw new Error(`API error: ${res.status}`);
+                return [];
               }
-              return res.json() as Promise<LocationSample[]>;
-            })
-          );
-
-          for (const samples of results) {
-            allSamples.push(...samples);
-          }
-          loaded += batch.length;
-          if (!cancelled) setProgress({ loaded, total: nums.length });
-        }
+              return (await res.json()) as LocationSample[];
+            } catch {
+              return [];
+            } finally {
+              completedCount++;
+              if (!cancelled)
+                setProgress({ loaded: completedCount, total: nums.length });
+            }
+          })
+        );
 
         if (!cancelled) {
-          setData(allSamples);
+          setData(results.flat());
           setIsLoading(false);
         }
       } catch (err) {
