@@ -1,26 +1,70 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --f1-bg: #15151E;
+  --f1-surface: #1E1E2E;
+  --f1-card: #252536;
+  --f1-border: #2E2E42;
+  --f1-red: #E10600;
+  --f1-red-hover: #FF1801;
+  --f1-text: #FFFFFF;
+  --f1-text-secondary: #A0A0B0;
+  --f1-text-muted: #6B6B7B;
+  --f1-success: #00D2BE;
+  --f1-warning: #FFC906;
+  --f1-soft: #FF3333;
+  --f1-medium: #FFC906;
+  --f1-hard: #EEEEEE;
+  --f1-intermediate: #43B02A;
+  --f1-wet: #0067FF;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-f1-bg: var(--f1-bg);
+  --color-f1-surface: var(--f1-surface);
+  --color-f1-card: var(--f1-card);
+  --color-f1-border: var(--f1-border);
+  --color-f1-red: var(--f1-red);
+  --color-f1-red-hover: var(--f1-red-hover);
+  --color-f1-text: var(--f1-text);
+  --color-f1-text-secondary: var(--f1-text-secondary);
+  --color-f1-text-muted: var(--f1-text-muted);
+  --color-f1-success: var(--f1-success);
+  --color-f1-warning: var(--f1-warning);
+  --font-sans: var(--font-titillium);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--f1-bg);
+  color: var(--f1-text);
+  font-family: var(--font-titillium), system-ui, sans-serif;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--f1-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--f1-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--f1-text-muted);
+}
+
+/* Skeleton animation */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+.animate-skeleton {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
