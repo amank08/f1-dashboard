@@ -25,7 +25,11 @@ export function diskCacheGet(key: string): unknown | null {
   }
 }
 
+// Skip disk-caching large per-driver location data (~4.5 MB each)
+const SKIP_DISK_PATTERN = /^location\b/;
+
 export function diskCacheSet(key: string, data: unknown): void {
+  if (SKIP_DISK_PATTERN.test(key)) return;
   try {
     ensureDir();
     const filePath = join(CACHE_DIR, keyToFilename(key));
