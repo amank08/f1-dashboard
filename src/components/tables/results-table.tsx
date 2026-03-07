@@ -95,11 +95,13 @@ export function buildResults(
     }
   }
 
-  // Best sector times per driver
+  // Best sector times per driver (same filters as fastest lap)
   const bestS1 = new Map<number, number>();
   const bestS2 = new Map<number, number>();
   const bestS3 = new Map<number, number>();
   for (const lap of laps) {
+    if (isNonRace && lap.lap_duration && lap.lap_duration > threshold107) continue;
+    if (lap.is_pit_out_lap) continue;
     const dn = lap.driver_number;
     if (lap.duration_sector_1 !== null && lap.duration_sector_1 !== undefined) {
       const cur = bestS1.get(dn);
