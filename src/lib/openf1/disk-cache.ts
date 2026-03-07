@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from "fs";
 import { join } from "path";
+import { getCacheTTL } from "./cache";
 
 const CACHE_DIR = join(process.cwd(), ".cache", "openf1");
 
@@ -14,10 +15,22 @@ function keyToFilename(key: string): string {
   return key.replace(/[^a-zA-Z0-9_=-]/g, "_") + ".json";
 }
 
+/** Extract the endpoint name from a cache key like "laps?session_key=123" */
+function endpointFromKey(key: string): string {
+  return key.split(/[?_]/)[0];
+}
+
 export function diskCacheGet(key: string): unknown | null {
   try {
     const filePath = join(CACHE_DIR, keyToFilename(key));
     if (!existsSync(filePath)) return null;
+
+    // Check file age against endpoint TTL
+    const stat = statSync(filePath);
+    const ageMs = Date.now() - stat.mtimeMs;
+    const ttl = getCacheTTL(endpointFromKey(key));
+    if (ageMs > ttl) return null; // stale — force re-fetch
+
     const raw = readFileSync(filePath, "utf-8");
     return JSON.parse(raw);
   } catch {

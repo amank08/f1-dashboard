@@ -30,18 +30,21 @@ class OpenF1Cache {
 const HOUR = 3600_000;
 const DAY = 86400_000;
 
+const MIN = 60_000;
+
 const CACHE_TTLS: Record<string, number> = {
   meetings: DAY,
   sessions: HOUR,
   drivers: HOUR,
-  laps: 7 * DAY,
-  car_data: 5 * 60_000,
-  pit: HOUR,
-  stints: HOUR,
-  weather: 10 * 60_000,
-  position: HOUR,
-  race_control: HOUR,
-  team_radio: HOUR,
+  laps: 30 * MIN,
+  car_data: 5 * MIN,
+  pit: 15 * MIN,
+  stints: 15 * MIN,
+  weather: 10 * MIN,
+  position: 30 * MIN,
+  race_control: 15 * MIN,
+  team_radio: 15 * MIN,
+  intervals: 10 * MIN,
   location: 7 * DAY,
 };
 

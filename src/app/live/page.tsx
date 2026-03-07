@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { isPast, parseISO } from "date-fns";
+import { isPast, isFuture, parseISO } from "date-fns";
 import { useMeetings } from "@/lib/hooks/use-meetings";
 import { useSessions } from "@/lib/hooks/use-sessions";
 import { usePositions } from "@/lib/hooks/use-positions";
@@ -12,13 +12,22 @@ import { useDrivers } from "@/lib/hooks/use-drivers";
 import { useRaceControl } from "@/lib/hooks/use-race-control";
 import { PageHeader } from "@/components/layout/page-header";
 import { SeasonSelector } from "@/components/selectors/season-selector";
+import { ResultsTable, buildResults } from "@/components/tables/results-table";
 import { TimingBoard, buildTimingData } from "@/components/live/timing-board";
 import { RaceControlFeed } from "@/components/live/race-control-feed";
 import { CircuitMap } from "@/components/live/circuit-map";
+import { SessionInfoPanel } from "@/components/live/session-info-panel";
 import { SessionReplay } from "@/components/live/session-replay";
+import { PodiumDisplay } from "@/components/live/podium-display";
+import { GridVsFinishChart } from "@/components/charts/grid-vs-finish-chart";
+import { PitStrategyChart } from "@/components/charts/pit-strategy-chart";
+import { LapDistributionChart } from "@/components/charts/lap-distribution-chart";
+import { TeammateH2HChart } from "@/components/charts/teammate-h2h-chart";
+import { SectorDominanceChart } from "@/components/charts/sector-dominance-chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils/cn";
+import { getPositionChanges } from "@/lib/utils/analytics";
 import type { Session } from "@/lib/openf1/types";
 
 const RACE_SESSION_TYPES = new Set([
@@ -50,7 +59,7 @@ export default function SessionAnalysisPage() {
   const [meetingKey, setMeetingKey] = useState<number | null>(null);
   const [sessionKey, setSessionKey] = useState<number | null>(null);
   const [autoSelected, setAutoSelected] = useState(false);
-  const [viewMode, setViewMode] = useState<"timing" | "replay">("timing");
+  const [viewMode, setViewMode] = useState<"results" | "replay">("results");
   const [replayTime, setReplayTime] = useState<number | null>(null);
 
   const handleReplayTimeChange = useCallback((time: number) => {
@@ -129,7 +138,7 @@ export default function SessionAnalysisPage() {
     setSessionKey(null);
     setAutoSelected(false);
     setReplayTime(null);
-    setViewMode("timing");
+    setViewMode("results");
   }
 
   // Reset session when meeting changes
@@ -145,31 +154,115 @@ export default function SessionAnalysisPage() {
     setReplayTime(null);
   }
 
-  // Fetch timing data for selected session
-  const { data: positions, error: posErr } = usePositions(sessionKey);
-  const { data: intervals, error: intErr } = useIntervals(sessionKey, false);
-  const { data: stints } = useStints(sessionKey);
-  const { data: laps, error: lapErr } = useLaps(sessionKey);
+  // Determine if the selected session is currently live
+  const isLiveSession = useMemo(() => {
+    if (!sessions || !sessionKey) return false;
+    const s = sessions.find((s) => s.session_key === sessionKey);
+    if (!s) return false;
+    return isPast(parseISO(s.date_start)) && isFuture(parseISO(s.date_end));
+  }, [sessions, sessionKey]);
+
+  // Fetch session data — poll when session is live
+  const { data: positions, error: posErr } = usePositions(sessionKey, isLiveSession);
+  const { data: intervals, error: intErr } = useIntervals(sessionKey, isLiveSession);
+  const { data: stints } = useStints(sessionKey, isLiveSession);
+  const { data: laps, error: lapErr } = useLaps(sessionKey, undefined, isLiveSession);
   const { data: drivers, error: drvErr } = useDrivers(sessionKey);
-  const { data: raceControl } = useRaceControl(sessionKey, false);
+  const { data: raceControl } = useRaceControl(sessionKey, isLiveSession);
 
-  const timingEntries =
-    drivers && positions && intervals && stints && laps
-      ? buildTimingData(drivers, positions, intervals, stints, laps)
-      : [];
+  // Filter out deleted lap times using race control messages
+  const validLaps = useMemo(() => {
+    if (!laps) return null;
+    if (!raceControl) return laps;
 
-  // Filtered data for replay mode sidebar
+    // Parse deleted laps from race control messages
+    const deletedKeys = new Set<string>();
+    const deletedByCarTime = new Map<string, string>();
+
+    for (const msg of raceControl) {
+      const carMatch = msg.message.match(/CAR (\d+)/);
+      if (!carMatch) continue;
+      const car = carMatch[1];
+
+      if (msg.message.includes("DELETED")) {
+        const lapMatch = msg.message.match(/LAP (\d+)/);
+        const timeMatch = msg.message.match(/TIME ([\d:.]+)/);
+        if (lapMatch) {
+          const key = `${car}-${lapMatch[1]}`;
+          deletedKeys.add(key);
+          if (timeMatch) {
+            deletedByCarTime.set(`${car}-${timeMatch[1]}`, key);
+          }
+        }
+      } else if (msg.message.includes("REINSTATED")) {
+        const timeMatch = msg.message.match(/TIME ([\d:.]+)/);
+        if (timeMatch) {
+          const restored = deletedByCarTime.get(`${car}-${timeMatch[1]}`);
+          if (restored) deletedKeys.delete(restored);
+        }
+      }
+    }
+
+    if (deletedKeys.size === 0) return laps;
+    return laps.filter((l) => !deletedKeys.has(`${l.driver_number}-${l.lap_number}`));
+  }, [laps, raceControl]);
+
+  // Enriched results (pass intervals + stints for the 10-column table)
+  const resultRows = useMemo(() => {
+    if (!drivers || !positions || !validLaps) return [];
+    const sessionType = sessions?.find((s) => s.session_key === sessionKey)?.session_type;
+    return buildResults(positions, drivers, validLaps, intervals ?? undefined, stints ?? undefined, sessionType);
+  }, [positions, drivers, validLaps, intervals, stints, sessions, sessionKey]);
+
+  // Race summary stats
+  const raceStats = useMemo(() => {
+    if (!drivers || !validLaps || !positions) return null;
+
+    // Position changes
+    const sorted = [...positions].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+    const gridMap = new Map<number, number>();
+    const finishMap = new Map<number, number>();
+    for (const p of sorted) {
+      if (!gridMap.has(p.driver_number)) gridMap.set(p.driver_number, p.position);
+      finishMap.set(p.driver_number, p.position);
+    }
+    const changes = getPositionChanges(gridMap, finishMap);
+
+    // Total laps
+    const totalLaps = Math.max(...validLaps.map((l) => l.lap_number), 0);
+
+    return {
+      changes,
+      gridMap,
+      finishMap,
+      totalLaps,
+    };
+  }, [drivers, validLaps, positions, resultRows]);
+
+  // Chart data for GridVsFinish
+  const gridVsFinishData = useMemo(() => {
+    if (!raceStats || !drivers) return [];
+    const driverLookup = new Map(drivers.map((d) => [d.driver_number, d]));
+    return raceStats.changes.map((c) => ({
+      name: driverLookup.get(c.driverNumber)?.name_acronym ?? String(c.driverNumber),
+      gridPos: c.gridPos,
+      finishPos: c.finishPos,
+      teamColour: driverLookup.get(c.driverNumber)?.team_colour ?? "888888",
+      change: c.change,
+    }));
+  }, [raceStats, drivers]);
+
+  // Filtered timing data for replay mode sidebar
   const replayTimingEntries = useMemo(() => {
     if (!drivers || !positions || !intervals || !stints || !laps) return [];
-    // Show full timing data while replay hasn't reported a time yet
     if (replayTime === null)
       return buildTimingData(drivers, positions, intervals, stints, laps);
     const cutoff = new Date(replayTime).toISOString();
     const filteredPositions = positions.filter((p) => p.date <= cutoff);
     const filteredIntervals = intervals.filter((i) => i.date <= cutoff);
     const filteredLaps = laps.filter((l) => l.date_start <= cutoff);
-    // For stints, keep those that started before or at current time
-    // by finding the max lap number reached
     const maxLapByDriver = new Map<number, number>();
     for (const l of filteredLaps) {
       const cur = maxLapByDriver.get(l.driver_number) ?? 0;
@@ -184,7 +277,8 @@ export default function SessionAnalysisPage() {
       filteredPositions,
       filteredIntervals,
       filteredStints,
-      filteredLaps
+      filteredLaps,
+      replayTime
     );
   }, [replayTime, drivers, positions, intervals, stints, laps]);
 
@@ -194,7 +288,7 @@ export default function SessionAnalysisPage() {
     return raceControl.filter((m) => m.date <= cutoff);
   }, [replayTime, raceControl]);
 
-  const dataLoading = sessionKey && (!positions || !intervals || !drivers);
+  const dataLoading = sessionKey && (!positions || !drivers);
   const dataError = posErr || intErr || drvErr || lapErr;
   const dataUnavailable = sessionKey && !dataLoading && dataError && !positions;
 
@@ -202,10 +296,132 @@ export default function SessionAnalysisPage() {
     (s) => s.session_key === sessionKey
   );
 
+  const isRaceSession = selectedSession?.session_type === "Race" || selectedSession?.session_type === "Sprint";
+  const isQualifying = selectedSession?.session_type === "Qualifying" || selectedSession?.session_type === "Sprint Qualifying" || selectedSession?.session_type === "Sprint Shootout";
+
+  // Qualifying: segment times, cutoffs, and knockout positions (all dynamic)
+  const qualiCutoffs = useMemo(() => {
+    if (!isQualifying || !validLaps || !raceControl || !resultRows.length) return undefined;
+
+    // Parse qualifying segment boundaries from race control
+    // Use only "SESSION STARTED" to avoid double-counting with "GREEN LIGHT"
+    const starts: string[] = [];
+    const ends: string[] = [];
+    for (const msg of raceControl) {
+      if (msg.message === "SESSION STARTED") {
+        starts.push(msg.date);
+      }
+      if (msg.message === "CHEQUERED FLAG") {
+        ends.push(msg.date);
+      }
+    }
+    const segCount = Math.min(starts.length, ends.length, 3);
+    if (segCount < 2) return undefined;
+
+    // Best valid lap per driver per segment
+    function bestInSegment(segStart: string, segEnd: string, nextSegStart?: string): Map<number, number> {
+      const best = new Map<number, number>();
+      for (const lap of validLaps!) {
+        if (!lap.lap_duration || lap.is_pit_out_lap) continue;
+        const boundary = nextSegStart ?? segEnd;
+        if (lap.date_start >= segStart && lap.date_start < boundary) {
+          const cur = best.get(lap.driver_number);
+          if (!cur || lap.lap_duration < cur) {
+            best.set(lap.driver_number, lap.lap_duration);
+          }
+        }
+      }
+      return best;
+    }
+
+    const segBests: Map<number, number>[] = [];
+    for (let i = 0; i < segCount; i++) {
+      segBests.push(bestInSegment(starts[i], ends[i], starts[i + 1]));
+    }
+
+    // Determine each driver's last segment (the furthest they advanced)
+    // and build segment-specific display times
+    const driverLastSeg = new Map<number, number>();
+    for (const row of resultRows) {
+      const dNum = row.driver.driver_number;
+      for (let s = segCount - 1; s >= 0; s--) {
+        if (segBests[s].has(dNum)) {
+          driverLastSeg.set(dNum, s);
+          break;
+        }
+      }
+    }
+
+    const segmentTimes = new Map<number, number>();
+    for (const row of resultRows) {
+      const dNum = row.driver.driver_number;
+      const seg = driverLastSeg.get(dNum);
+      if (seg != null) {
+        const t = segBests[seg].get(dNum);
+        if (t != null) segmentTimes.set(dNum, t);
+      }
+    }
+
+    // Knockout positions: first position where driver's last segment drops
+    // e.g., if last Q3 driver is at position N, then position N+1 is the first Q2 knockout
+    const sortedByPos = [...resultRows].sort((a, b) => a.position - b.position);
+    let q2KnockoutPos: number | null = null; // first position knocked out in Q2
+    let q1KnockoutPos: number | null = null; // first position knocked out in Q1
+    for (const row of sortedByPos) {
+      const seg = driverLastSeg.get(row.driver.driver_number);
+      if (seg === segCount - 2 && q2KnockoutPos === null) {
+        // This driver's last segment was Q2 (index segCount-2) — first Q2 knockout
+        q2KnockoutPos = row.position;
+      }
+      if (seg === 0 && q1KnockoutPos === null && segCount >= 2) {
+        // This driver only made Q1 — first Q1 knockout
+        q1KnockoutPos = row.position;
+      }
+    }
+
+    // Cutoff times: the slowest driver who advanced from each segment
+    // Q2 cutoff = slowest Q3 participant's Q2 time
+    // Q1 cutoff = slowest Q2 participant's Q1 time
+    let q2CutoffTime: number | null = null;
+    let q1CutoffTime: number | null = null;
+
+    if (segCount >= 3) {
+      // Q2 cutoff: among drivers who made Q3, find the slowest Q2 time
+      let worstQ2ofQ3 = -Infinity;
+      for (const [dNum, seg] of driverLastSeg) {
+        if (seg === segCount - 1) { // made it to Q3
+          const q2Time = segBests[segCount - 2].get(dNum);
+          if (q2Time != null && q2Time > worstQ2ofQ3) worstQ2ofQ3 = q2Time;
+        }
+      }
+      if (worstQ2ofQ3 > 0) q2CutoffTime = worstQ2ofQ3;
+    }
+
+    if (segCount >= 2) {
+      // Q1 cutoff: among drivers who made Q2, find the slowest Q1 time
+      let worstQ1ofQ2 = -Infinity;
+      for (const [dNum, seg] of driverLastSeg) {
+        if (seg >= 1) { // made it to Q2 or beyond
+          const q1Time = segBests[0].get(dNum);
+          if (q1Time != null && q1Time > worstQ1ofQ2) worstQ1ofQ2 = q1Time;
+        }
+      }
+      if (worstQ1ofQ2 > 0) q1CutoffTime = worstQ1ofQ2;
+    }
+
+    return {
+      q1CutoffTime,
+      q2CutoffTime,
+      segmentTimes,
+      q2KnockoutPos,
+      q1KnockoutPos,
+    };
+  }, [isQualifying, validLaps, raceControl, resultRows]);
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Session Analysis"
+        title="Session Overview"
         subtitle={
           selectedSession
             ? `${selectedSession.session_name} — ${selectedSession.location}`
@@ -257,15 +473,15 @@ export default function SessionAnalysisPage() {
         {sessionKey && (
           <div className="flex rounded-md border border-f1-border">
             <button
-              onClick={() => setViewMode("timing")}
+              onClick={() => setViewMode("results")}
               className={cn(
                 "px-3 py-2 text-sm font-semibold transition-colors",
-                viewMode === "timing"
+                viewMode === "results"
                   ? "bg-f1-red text-white"
                   : "bg-f1-surface text-f1-text-secondary hover:bg-f1-card"
               )}
             >
-              Timing
+              Results
             </button>
             <button
               onClick={() => setViewMode("replay")}
@@ -311,57 +527,21 @@ export default function SessionAnalysisPage() {
         />
       )}
 
-      {/* Timing board + race control */}
-      {sessionKey && viewMode === "timing" && !dataUnavailable && (
-        <div className="grid gap-6 lg:grid-cols-[1fr_350px]">
-          <div className="space-y-4">
-            {dataLoading ? (
-              <div className="space-y-2">
-                {Array.from({ length: 20 }).map((_, i) => (
-                  <Skeleton key={i} className="h-10" />
-                ))}
-              </div>
-            ) : (
-              <TimingBoard entries={timingEntries} />
-            )}
-          </div>
-          <div className="space-y-4">
-            {selectedSession && (
-              <CircuitMap circuitShortName={selectedSession.circuit_short_name} />
-            )}
-            <h3 className="text-sm font-semibold uppercase text-f1-text-muted">
-              Race Control
-            </h3>
-            {raceControl ? (
-              <RaceControlFeed messages={raceControl} />
-            ) : (
-              <Skeleton className="h-64" />
-            )}
-          </div>
-        </div>
-      )}
+      {/* Results + race control */}
+      {sessionKey && viewMode === "results" && !dataUnavailable && (
+        <>
+          {/* Top 3 Podium */}
+          {resultRows.length >= 3 && !dataLoading && (
+            <PodiumDisplay
+              entries={resultRows.slice(0, 3).map((row) => ({
+                position: row.position,
+                driver: row.driver,
+              }))}
+            />
+          )}
 
-      {/* Replay mode */}
-      {sessionKey && viewMode === "replay" && !dataUnavailable && (
-        <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
-          <div>
-            {drivers && laps ? (
-              <SessionReplay
-                sessionKey={sessionKey}
-                sessionType={selectedSession?.session_type ?? "Race"}
-                drivers={drivers}
-                laps={laps}
-                raceControl={raceControl ?? []}
-                onTimeChange={handleReplayTimeChange}
-              />
-            ) : (
-              <div className="space-y-4">
-                <Skeleton className="aspect-square w-full" />
-                <Skeleton className="h-24" />
-              </div>
-            )}
-          </div>
-          <div className="space-y-4">
+          {/* Results table + sidebar */}
+          <div className="grid gap-6 lg:grid-cols-[1fr_350px]">
             <div className="space-y-4">
               {dataLoading ? (
                 <div className="space-y-2">
@@ -370,18 +550,95 @@ export default function SessionAnalysisPage() {
                   ))}
                 </div>
               ) : (
-                <TimingBoard entries={replayTimingEntries} />
+                <ResultsTable results={resultRows} sessionType={selectedSession?.session_type} qualiCutoffs={qualiCutoffs} />
               )}
             </div>
-            <h3 className="text-sm font-semibold uppercase text-f1-text-muted">
-              Race Control
-            </h3>
-            {raceControl ? (
-              <RaceControlFeed messages={replayRaceControl} />
-            ) : (
-              <Skeleton className="h-64" />
-            )}
+            <div className="space-y-4">
+              {selectedSession && (
+                <CircuitMap circuitShortName={selectedSession.circuit_short_name} />
+              )}
+              {selectedSession && (
+                <SessionInfoPanel
+                  session={selectedSession}
+                  year={year}
+                  totalLaps={raceStats?.totalLaps}
+                />
+              )}
+            </div>
           </div>
+
+          {/* Charts */}
+          {!dataLoading && raceStats && (
+            <div className="grid gap-6 lg:grid-cols-2">
+              {isRaceSession
+                ? gridVsFinishData.length > 0 && (
+                    <GridVsFinishChart data={gridVsFinishData} />
+                  )
+                : isQualifying
+                  ? validLaps && drivers && (
+                      <TeammateH2HChart drivers={drivers} laps={validLaps} />
+                    )
+                  : validLaps && drivers && (
+                      <LapDistributionChart laps={validLaps} drivers={drivers} stints={stints ?? undefined} />
+                    )}
+              {isQualifying && validLaps && drivers && (
+                <SectorDominanceChart drivers={drivers} laps={validLaps} />
+              )}
+              {(isRaceSession || selectedSession?.session_type === "Practice") && stints && drivers && raceStats.totalLaps > 0 && (
+                <PitStrategyChart
+                  stints={stints}
+                  drivers={drivers}
+                  totalLaps={raceStats.totalLaps}
+                  finishOrder={resultRows.map((r) => r.driver.driver_number)}
+                />
+              )}
+            </div>
+          )}
+
+        </>
+      )}
+
+      {/* Replay mode */}
+      {sessionKey && viewMode === "replay" && !dataUnavailable && (
+        <div className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
+            <div>
+              {drivers && laps ? (
+                <SessionReplay
+                  sessionKey={sessionKey}
+                  sessionType={selectedSession?.session_type ?? "Race"}
+                  drivers={drivers}
+                  laps={laps}
+                  raceControl={raceControl ?? []}
+                  onTimeChange={handleReplayTimeChange}
+                />
+              ) : (
+                <div className="space-y-4">
+                  <Skeleton className="aspect-square w-full" />
+                  <Skeleton className="h-24" />
+                </div>
+              )}
+            </div>
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold uppercase text-f1-text-muted">
+                Race Control
+              </h3>
+              {raceControl ? (
+                <RaceControlFeed messages={replayRaceControl} />
+              ) : (
+                <Skeleton className="h-64" />
+              )}
+            </div>
+          </div>
+          {dataLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 20 }).map((_, i) => (
+                <Skeleton key={i} className="h-10" />
+              ))}
+            </div>
+          ) : (
+            <TimingBoard entries={replayTimingEntries} />
+          )}
         </div>
       )}
     </div>
