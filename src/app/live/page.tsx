@@ -306,20 +306,25 @@ export default function SessionAnalysisPage() {
   const qualiCutoffs = useMemo(() => {
     if (!isQualifying || !validLaps || !raceControl || !resultRows.length) return undefined;
 
-    // Parse qualifying segment boundaries from race control
-    // Use only "SESSION STARTED" to avoid double-counting with "GREEN LIGHT"
-    const starts: string[] = [];
-    const ends: string[] = [];
+    // Parse qualifying segment boundaries (Q1/Q2/Q3) from race control.
+    // Each segment ends with CHEQUERED FLAG. Red flags cause extra SESSION STARTED
+    // messages within the same segment, so we pair each CHEQUERED FLAG with the
+    // first SESSION STARTED after the previous CHEQUERED FLAG.
+    const segments: { start: string; end: string }[] = [];
+    let pendingStart: string | null = null;
     for (const msg of raceControl) {
-      if (msg.message === "SESSION STARTED") {
-        starts.push(msg.date);
+      if (msg.message === "SESSION STARTED" && pendingStart === null) {
+        pendingStart = msg.date;
       }
-      if (msg.message === "CHEQUERED FLAG") {
-        ends.push(msg.date);
+      if (msg.message === "CHEQUERED FLAG" && pendingStart !== null) {
+        segments.push({ start: pendingStart, end: msg.date });
+        pendingStart = null;
       }
     }
-    const segCount = Math.min(starts.length, ends.length, 3);
+    const segCount = Math.min(segments.length, 3);
     if (segCount < 2) return undefined;
+    const starts = segments.map((s) => s.start);
+    const ends = segments.map((s) => s.end);
 
     // Best valid lap per driver per segment (107% rule filters in-laps)
     function bestInSegment(segStart: string, segEnd: string, nextSegStart?: string): Map<number, number> {
