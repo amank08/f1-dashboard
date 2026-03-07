@@ -273,7 +273,7 @@ function getSectorColor(
   personalBest: number | null
 ): string {
   if (value === null) return "text-f1-text-muted";
-  if (bestOverall !== null && value <= bestOverall) return "text-purple-400";
+  if (bestOverall !== null && value === bestOverall) return "text-purple-400";
   if (personalBest !== null && value <= personalBest) return "text-green-400";
   return "text-yellow-400";
 }
