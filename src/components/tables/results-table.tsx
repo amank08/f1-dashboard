@@ -597,15 +597,22 @@ export function ResultsTable({
                       );
                     })()}
                   </td>
-                  <td className={cn("px-3 py-2.5 text-right font-mono text-xs", getSectorColor(row.fastestLapS1 ?? null, isFinite(overallBestS1) ? overallBestS1 : null, row.bestS1 ?? null))}>
-                    {row.fastestLapS1 != null ? row.fastestLapS1.toFixed(3) : "—"}
-                  </td>
-                  <td className={cn("px-3 py-2.5 text-right font-mono text-xs", getSectorColor(row.fastestLapS2 ?? null, isFinite(overallBestS2) ? overallBestS2 : null, row.bestS2 ?? null))}>
-                    {row.fastestLapS2 != null ? row.fastestLapS2.toFixed(3) : "—"}
-                  </td>
-                  <td className={cn("px-3 py-2.5 text-right font-mono text-xs", getSectorColor(row.fastestLapS3 ?? null, isFinite(overallBestS3) ? overallBestS3 : null, row.bestS3 ?? null))}>
-                    {row.fastestLapS3 != null ? row.fastestLapS3.toFixed(3) : "—"}
-                  </td>
+                  {(() => {
+                    const noTime = getQualiLapTime(row) == null && qualiCutoffs?.driverLastSeg?.has(row.driver.driver_number);
+                    return (
+                      <>
+                        <td className={cn("px-3 py-2.5 text-right font-mono text-xs", !noTime && getSectorColor(row.fastestLapS1 ?? null, isFinite(overallBestS1) ? overallBestS1 : null, row.bestS1 ?? null))}>
+                          {noTime ? "—" : row.fastestLapS1 != null ? row.fastestLapS1.toFixed(3) : "—"}
+                        </td>
+                        <td className={cn("px-3 py-2.5 text-right font-mono text-xs", !noTime && getSectorColor(row.fastestLapS2 ?? null, isFinite(overallBestS2) ? overallBestS2 : null, row.bestS2 ?? null))}>
+                          {noTime ? "—" : row.fastestLapS2 != null ? row.fastestLapS2.toFixed(3) : "—"}
+                        </td>
+                        <td className={cn("px-3 py-2.5 text-right font-mono text-xs", !noTime && getSectorColor(row.fastestLapS3 ?? null, isFinite(overallBestS3) ? overallBestS3 : null, row.bestS3 ?? null))}>
+                          {noTime ? "—" : row.fastestLapS3 != null ? row.fastestLapS3.toFixed(3) : "—"}
+                        </td>
+                      </>
+                    );
+                  })()}
                   <td className="px-3 py-2.5 text-center">
                     {row.compound && (
                       <span
