@@ -18,6 +18,12 @@ export interface CircuitPath {
   };
   /** Sector length proportions [S1, S2, S3] as percentages summing to 100 */
   sectorLengths: [number, number, number];
+  /** Perpendicular tick marks at intermediate timing points */
+  markers: {
+    i1: { x1: number; y1: number; x2: number; y2: number };
+    i2: { x1: number; y1: number; x2: number; y2: number };
+    st: { x1: number; y1: number; x2: number; y2: number };
+  };
 }
 
 export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
@@ -28,6 +34,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Circuit of the Americas",
     labels: { sf: {x: 17, y: 69}, s1: {x: 52, y: 58}, s2: {x: 75, y: 25}, s3: {x: 9, y: 44} , i1: {x: 45, y: 63}, i2: {x: 75, y: 25}, st: {x: 25, y: 44} },
     sectorLengths: [28, 39, 33],
+    markers: { i1: {"x1":43.02,"y1":58.33,"x2":41.31,"y2":55.16}, i2: {"x1":77.27,"y1":30.17,"x2":78.01,"y2":33.69}, st: {"x1":23.93,"y1":49.38,"x2":21.15,"y2":51.67} },
   },
   "Baku": {
     viewBox: "0 0 100 100",
@@ -36,6 +43,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Baku City Circuit",
     labels: { sf: {x: 94, y: 42}, s1: {x: 67, y: 38}, s2: {x: 35, y: 50}, s3: {x: 15, y: 65} , i1: {x: 67, y: 24}, i2: {x: 14, y: 60}, st: {x: 56, y: 56} },
     sectorLengths: [34, 35, 31],
+    markers: { i1: {"x1":68.87,"y1":29.24,"x2":70.04,"y2":32.64}, i2: {"x1":10.76,"y1":52.24,"x2":12.26,"y2":55.51}, st: {"x1":53.67,"y1":50.94,"x2":52.45,"y2":47.55} },
   },
   "Catalunya": {
     viewBox: "0 0 100 100",
@@ -44,6 +52,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Circuit de Barcelona-Catalunya",
     labels: { sf: {x: 81, y: 50}, s1: {x: 39, y: 69}, s2: {x: 13, y: 84}, s3: {x: 73, y: 14} , i1: {x: 31, y: 91}, i2: {x: 54, y: 62}, st: {x: 68, y: 3} },
     sectorLengths: [34, 34, 32],
+    markers: { i1: {"x1":30.95,"y1":83.9,"x2":30.95,"y2":87.5}, i2: {"x1":50.45,"y1":67.92,"x2":47.37,"y2":66.05}, st: {"x1":70.98,"y1":11.41,"x2":69.52,"y2":8.12} },
   },
   "Hungaroring": {
     viewBox: "0 0 100 100",
@@ -52,6 +61,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Hungaroring",
     labels: { sf: {x: 23, y: 73}, s1: {x: 44, y: 34}, s2: {x: 84, y: 59}, s3: {x: 52, y: 75} , i1: {x: 32, y: 53}, i2: {x: 70, y: 37}, st: {x: 58, y: 79} },
     sectorLengths: [36, 31, 33],
+    markers: { i1: {"x1":30.84,"y1":62.02,"x2":32.54,"y2":58.84}, i2: {"x1":75.07,"y1":35.25,"x2":78.42,"y2":33.93}, st: {"x1":61.64,"y1":78.67,"x2":63.36,"y2":75.51} },
   },
   "Imola": {
     viewBox: "0 0 100 100",
@@ -60,6 +70,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Autodromo Enzo e Dino Ferrari",
     labels: { sf: {x: 65, y: 30}, s1: {x: 27, y: 47}, s2: {x: 23, y: 59}, s3: {x: 50, y: 57} , i1: {x: 20, y: 35}, i2: {x: 30, y: 57}, st: {x: 97, y: 44} },
     sectorLengths: [38, 29, 33],
+    markers: { i1: {"x1":21.88,"y1":39.61,"x2":23.11,"y2":42.99}, i2: {"x1":38.89,"y1":56.08,"x2":35.44,"y2":57.1}, st: {"x1":95.73,"y1":39.11,"x2":93.63,"y2":36.19} },
   },
   "Interlagos": {
     viewBox: "0 0 100 100",
@@ -68,6 +79,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Autódromo José Carlos Pace - Interlagos",
     labels: { sf: {x: 18, y: 73}, s1: {x: 65, y: 50}, s2: {x: 48, y: 18}, s3: {x: 28, y: 33} , i1: {x: 63, y: 72}, i2: {x: 36, y: 48}, st: {x: 18, y: 17} },
     sectorLengths: [40, 33, 27],
+    markers: { i1: {"x1":71.11,"y1":74.67,"x2":67.65,"y2":73.7}, i2: {"x1":37.18,"y1":42.08,"x2":35,"y2":39.22}, st: {"x1":22.74,"y1":18.94,"x2":26.2,"y2":19.95} },
   },
   "Jeddah": {
     viewBox: "0 0 100 100",
@@ -76,6 +88,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Jeddah Corniche Circuit",
     labels: { sf: {x: 61, y: 71}, s1: {x: 52, y: 40}, s2: {x: 37, y: 14}, s3: {x: 46, y: 94} , i1: {x: 52, y: 43}, i2: {x: 37, y: 19}, st: {x: 42, y: 88} },
     sectorLengths: [32, 32, 36],
+    markers: { i1: {"x1":46.57,"y1":44,"x2":45.34,"y2":47.38}, i2: {"x1":41.99,"y1":21.45,"x2":45.53,"y2":22.12}, st: {"x1":46.56,"y1":86.39,"x2":49.68,"y2":84.57} },
   },
   "Las Vegas": {
     viewBox: "0 0 100 100",
@@ -84,6 +97,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Las Vegas Street Circuit",
     labels: { sf: {x: 82, y: 90}, s1: {x: 72, y: 50}, s2: {x: 38, y: 15}, s3: {x: 25, y: 87} , i1: {x: 68, y: 61}, i2: {x: 39, y: 12}, st: {x: 32, y: 90} },
     sectorLengths: [29, 40, 31],
+    markers: { i1: {"x1":65.12,"y1":61.11,"x2":61.52,"y2":61.14}, i2: {"x1":39.65,"y1":3.71,"x2":39.07,"y2":7.27}, st: {"x1":32.41,"y1":96.78,"x2":32.47,"y2":93.18} },
   },
   "Lusail": {
     viewBox: "0 0 100 100",
@@ -92,6 +106,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Losail International Circuit",
     labels: { sf: {x: 16, y: 63}, s1: {x: 45, y: 16}, s2: {x: 75, y: 47}, s3: {x: 50, y: 80} , i1: {x: 33, y: 40}, i2: {x: 63, y: 47}, st: {x: 60, y: 91} },
     sectorLengths: [31, 38, 31],
+    markers: { i1: {"x1":29.55,"y1":36.87,"x2":27.22,"y2":34.12}, i2: {"x1":59.72,"y1":39.15,"x2":60.49,"y2":42.66}, st: {"x1":51.76,"y1":86.99,"x2":54.89,"y2":88.77} },
   },
   "Melbourne": {
     viewBox: "0 0 100 100",
@@ -100,6 +115,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Albert Park Circuit",
     labels: { sf: {x: 35, y: 75}, s1: {x: 22, y: 38}, s2: {x: 45, y: 18}, s3: {x: 78, y: 72} , i1: {x: 17, y: 37}, i2: {x: 61, y: 34}, st: {x: 73, y: 98} },
     sectorLengths: [30, 36, 34],
+    markers: { i1: {"x1":14.57,"y1":39.46,"x2":12.03,"y2":42.01}, i2: {"x1":54.73,"y1":28.25,"x2":57.25,"y2":30.83}, st: {"x1":79.06,"y1":91.16,"x2":76.92,"y2":94.06} },
   },
   "Mexico City": {
     viewBox: "0 0 100 100",
@@ -108,6 +124,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Autódromo Hermanos Rodríguez",
     labels: { sf: {x: 18, y: 13}, s1: {x: 60, y: 33}, s2: {x: 79, y: 54}, s3: {x: 30, y: 45} , i1: {x: 63, y: 19}, i2: {x: 75, y: 87}, st: {x: 23, y: 31} },
     sectorLengths: [32, 38, 30],
+    markers: { i1: {"x1":62.92,"y1":27.36,"x2":63.4,"y2":23.79}, i2: {"x1":71.64,"y1":78.86,"x2":73.73,"y2":81.79}, st: {"x1":18.49,"y1":33.19,"x2":14.9,"y2":33.44} },
   },
   "Miami": {
     viewBox: "0 0 100 100",
@@ -116,6 +133,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Miami International Autodrome",
     labels: { sf: {x: 60, y: 42}, s1: {x: 50, y: 55}, s2: {x: 21, y: 49}, s3: {x: 79, y: 45} , i1: {x: 29, y: 47}, i2: {x: 82, y: 64}, st: {x: 30, y: 27} },
     sectorLengths: [36, 31, 33],
+    markers: { i1: {"x1":29.3,"y1":52.3,"x2":28.74,"y2":55.86}, i2: {"x1":80.26,"y1":60.89,"x2":78.92,"y2":57.55}, st: {"x1":30.38,"y1":32.66,"x2":30.23,"y2":36.26} },
   },
   "Monte Carlo": {
     viewBox: "0 0 100 100",
@@ -124,6 +142,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Circuit de Monaco",
     labels: { sf: {x: 57, y: 21}, s1: {x: 80, y: 18}, s2: {x: 47, y: 34}, s3: {x: 20, y: 67} , i1: {x: 98, y: 4}, i2: {x: 18, y: 59}, st: {x: 25, y: 39} },
     sectorLengths: [34, 33, 33],
+    markers: { i1: {"x1":93.11,"y1":10.18,"x2":96.7,"y2":10.37}, i2: {"x1":12.53,"y1":65.92,"x2":14.22,"y2":62.74}, st: {"x1":28.21,"y1":46.78,"x2":27.46,"y2":43.26} },
   },
   "Montreal": {
     viewBox: "0 0 100 100",
@@ -132,6 +151,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Circuit Gilles-Villeneuve",
     labels: { sf: {x: 70, y: 67}, s1: {x: 46, y: 31}, s2: {x: 36, y: 55}, s3: {x: 59, y: 84} , i1: {x: 61, y: 86}, i2: {x: 24, y: 39}, st: {x: 63, y: 33} },
     sectorLengths: [30, 37, 33],
+    markers: { i1: {"x1":65.23,"y1":92.75,"x2":64.53,"y2":96.28}, i2: {"x1":32.23,"y1":42.5,"x2":28.84,"y2":41.3}, st: {"x1":54.58,"y1":36.52,"x2":58.03,"y2":35.49} },
   },
   "Monza": {
     viewBox: "0 0 100 100",
@@ -140,6 +160,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Autodromo Nazionale Monza",
     labels: { sf: {x: 7, y: 65}, s1: {x: 40, y: 25}, s2: {x: 79, y: 13}, s3: {x: 22, y: 82} , i1: {x: 14, y: 18}, i2: {x: 76, y: 31}, st: {x: 32, y: 97} },
     sectorLengths: [32, 38, 30],
+    markers: { i1: {"x1":22.24,"y1":21.48,"x2":18.98,"y2":19.95}, i2: {"x1":72.42,"y1":22.41,"x2":73.71,"y2":25.77}, st: {"x1":24.07,"y1":92.6,"x2":26.03,"y2":95.62} },
   },
   "Sakhir": {
     viewBox: "0 0 100 100",
@@ -148,6 +169,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Bahrain International Circuit",
     labels: { sf: {x: 12, y: 50}, s1: {x: 55, y: 17}, s2: {x: 60, y: 45}, s3: {x: 37, y: 80} , i1: {x: 44, y: 14}, i2: {x: 29, y: 22}, st: {x: 42, y: 92} },
     sectorLengths: [31, 36, 33],
+    markers: { i1: {"x1":41.32,"y1":9.73,"x2":41.94,"y2":6.18}, i2: {"x1":34.37,"y1":22.2,"x2":37.93,"y2":22.73}, st: {"x1":38.23,"y1":84.2,"x2":39.85,"y2":87.42} },
   },
   "Shanghai": {
     viewBox: "0 0 100 100",
@@ -156,6 +178,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Shanghai International Circuit",
     labels: { sf: {x: 34, y: 84}, s1: {x: 9, y: 61}, s2: {x: 38, y: 31}, s3: {x: 85, y: 57} , i1: {x: 8, y: 59}, i2: {x: 38, y: 32}, st: {x: 79, y: 80} },
     sectorLengths: [34, 34, 32],
+    markers: { i1: {"x1":12.97,"y1":53.81,"x2":10.46,"y2":56.4}, i2: {"x1":36.85,"y1":24.16,"x2":39.46,"y2":26.64}, st: {"x1":85.09,"y1":73.55,"x2":82.36,"y2":75.9} },
   },
   "Silverstone": {
     viewBox: "0 0 100 100",
@@ -164,6 +187,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Silverstone Circuit",
     labels: { sf: {x: 52, y: 12}, s1: {x: 82, y: 32}, s2: {x: 63, y: 68}, s3: {x: 18, y: 51} , i1: {x: 84, y: 50}, i2: {x: 18, y: 70}, st: {x: 39, y: 23} },
     sectorLengths: [33, 34, 33],
+    markers: { i1: {"x1":87.48,"y1":45.93,"x2":90.91,"y2":44.81}, i2: {"x1":14.51,"y1":66.75,"x2":12.26,"y2":63.94}, st: {"x1":39.32,"y1":14.08,"x2":38.24,"y2":17.51} },
   },
   "Singapore": {
     viewBox: "0 0 100 100",
@@ -172,6 +196,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Marina Bay Street Circuit",
     labels: { sf: {x: 88, y: 49}, s1: {x: 61, y: 51}, s2: {x: 18, y: 62}, s3: {x: 87, y: 33} , i1: {x: 65, y: 65}, i2: {x: 12, y: 60}, st: {x: 87, y: 51} },
     sectorLengths: [32, 34, 34],
+    markers: { i1: {"x1":67.57,"y1":56.26,"x2":67.36,"y2":59.86}, i2: {"x1":6.81,"y1":59.83,"x2":3.22,"y2":59.98}, st: {"x1":85.6,"y1":45.09,"x2":82.44,"y2":43.37} },
   },
   "Spa-Francorchamps": {
     viewBox: "0 0 100 100",
@@ -180,6 +205,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Circuit de Spa-Francorchamps",
     labels: { sf: {x: 26, y: 19}, s1: {x: 59, y: 31}, s2: {x: 85, y: 73}, s3: {x: 20, y: 78} , i1: {x: 63, y: 19}, i2: {x: 67, y: 80}, st: {x: 42, y: 69} },
     sectorLengths: [29, 38, 33],
+    markers: { i1: {"x1":60.56,"y1":25.49,"x2":61.94,"y2":22.16}, i2: {"x1":75.56,"y1":76.94,"x2":72.12,"y2":77.98}, st: {"x1":39.77,"y1":64.23,"x2":37.92,"y2":61.14} },
   },
   "Spielberg": {
     viewBox: "0 0 100 100",
@@ -188,6 +214,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Red Bull Ring",
     labels: { sf: {x: 68, y: 71}, s1: {x: 25, y: 39}, s2: {x: 40, y: 26}, s3: {x: 80, y: 55} , i1: {x: 20, y: 55}, i2: {x: 63, y: 43}, st: {x: 86, y: 53} },
     sectorLengths: [35, 32, 33],
+    markers: { i1: {"x1":26.16,"y1":49.27,"x2":23.18,"y2":51.28}, i2: {"x1":55.85,"y1":38.79,"x2":57.1,"y2":42.17}, st: {"x1":85.76,"y1":49.75,"x2":85.7,"y2":46.15} },
   },
   "Suzuka": {
     viewBox: "0 0 100 100",
@@ -196,6 +223,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Suzuka International Racing Course",
     labels: { sf: {x: 87, y: 46}, s1: {x: 50, y: 37}, s2: {x: 21, y: 32}, s3: {x: 72, y: 63} , i1: {x: 75, y: 65}, i2: {x: 29, y: 36}, st: {x: 46, y: 41} },
     sectorLengths: [34, 33, 33],
+    markers: { i1: {"x1":80.05,"y1":60.08,"x2":77.51,"y2":62.62}, i2: {"x1":31.19,"y1":40.89,"x2":31.63,"y2":44.46}, st: {"x1":49.22,"y1":49.51,"x2":47.86,"y2":46.18} },
   },
   "Yas Marina Circuit": {
     viewBox: "0 0 100 100",
@@ -204,6 +232,7 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Yas Marina Circuit",
     labels: { sf: {x: 46, y: 49}, s1: {x: 60, y: 25}, s2: {x: 41, y: 62}, s3: {x: 62, y: 80} , i1: {x: 59, y: 30}, i2: {x: 26, y: 73}, st: {x: 62, y: 66} },
     sectorLengths: [33, 35, 32],
+    markers: { i1: {"x1":53.92,"y1":28.22,"x2":50.46,"y2":27.23}, i2: {"x1":30.97,"y1":71.07,"x2":34.27,"y2":69.63}, st: {"x1":56.83,"y1":67.47,"x2":53.63,"y2":69.12} },
   },
   "Zandvoort": {
     viewBox: "0 0 100 100",
@@ -212,5 +241,6 @@ export const CIRCUIT_PATHS: Record<string, CircuitPath> = {
     name: "Circuit Zandvoort",
     labels: { sf: {x: 9, y: 43}, s1: {x: 45, y: 40}, s2: {x: 87, y: 50}, s3: {x: 20, y: 65} , i1: {x: 36, y: 41}, i2: {x: 82, y: 72}, st: {x: 21, y: 65} },
     sectorLengths: [32, 34, 34],
+    markers: { i1: {"x1":27.59,"y1":42.97,"x2":28.44,"y2":46.47}, i2: {"x1":81.45,"y1":62.99,"x2":82.19,"y2":66.51}, st: {"x1":26.09,"y1":65.8,"x2":29.55,"y2":64.82} },
   },
 };

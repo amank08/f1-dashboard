@@ -46,6 +46,24 @@ export function CircuitMap({ circuitShortName }: CircuitMapProps) {
           strokeWidth="1.5"
           strokeLinecap="round"
         />
+        {/* Intermediate / speed trap tick marks */}
+        {([
+          { line: circuit.markers.i1, color: SECTOR_COLORS[0] },
+          { line: circuit.markers.i2, color: SECTOR_COLORS[1] },
+          { line: circuit.markers.st, color: SECTOR_COLORS[2] },
+        ] as const).map(({ line, color }, i) => (
+          <line
+            key={`marker-${i}`}
+            x1={line.x1}
+            y1={line.y1}
+            x2={line.x2}
+            y2={line.y2}
+            stroke={color}
+            strokeWidth="1"
+            strokeLinecap="round"
+            opacity={0.7}
+          />
+        ))}
         {/* Sector labels with dark halo for separation from track */}
         {([
           { pos: circuit.labels.sf, label: 'S/F', color: 'white', size: 5 },
