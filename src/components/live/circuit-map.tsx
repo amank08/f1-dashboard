@@ -48,24 +48,28 @@ export function CircuitMap({ circuitShortName }: CircuitMapProps) {
         />
         {/* Sector labels with dark halo for separation from track */}
         {([
-          { pos: circuit.labels.sf, label: 'S/F', color: 'white' },
-          { pos: circuit.labels.s1, label: 'S1', color: SECTOR_COLORS[0] },
-          { pos: circuit.labels.s2, label: 'S2', color: SECTOR_COLORS[1] },
-          { pos: circuit.labels.s3, label: 'S3', color: SECTOR_COLORS[2] },
-        ] as const).map(({ pos, label, color }) => (
+          { pos: circuit.labels.sf, label: 'S/F', color: 'white', size: 5 },
+          { pos: circuit.labels.s1, label: 'S1', color: SECTOR_COLORS[0], size: 5 },
+          { pos: circuit.labels.s2, label: 'S2', color: SECTOR_COLORS[1], size: 5 },
+          { pos: circuit.labels.s3, label: 'S3', color: SECTOR_COLORS[2], size: 5 },
+          { pos: circuit.labels.i1, label: 'I1', color: SECTOR_COLORS[0], size: 3.5 },
+          { pos: circuit.labels.i2, label: 'I2', color: SECTOR_COLORS[1], size: 3.5 },
+          { pos: circuit.labels.st, label: 'ST', color: SECTOR_COLORS[2], size: 3.5 },
+        ] as const).map(({ pos, label, color, size }) => (
           <text
             key={label}
             x={pos.x}
             y={pos.y}
             fill={color}
-            fontSize={5}
+            fontSize={size}
             textAnchor="middle"
             dominantBaseline="central"
             fontWeight="bold"
             paintOrder="stroke"
             stroke="var(--f1-bg)"
-            strokeWidth={3}
+            strokeWidth={size < 5 ? 2 : 3}
             strokeLinejoin="round"
+            opacity={size < 5 ? 0.7 : 1}
           >
             {label}
           </text>
