@@ -321,11 +321,22 @@ export default function SessionAnalysisPage() {
     const segCount = Math.min(starts.length, ends.length, 3);
     if (segCount < 2) return undefined;
 
-    // Best valid lap per driver per segment
+    // Best valid lap per driver per segment (107% rule filters in-laps)
     function bestInSegment(segStart: string, segEnd: string, nextSegStart?: string): Map<number, number> {
       const best = new Map<number, number>();
+      // Find fastest lap in this segment for 107% threshold
+      let segFastest = Infinity;
       for (const lap of validLaps!) {
         if (!lap.lap_duration || lap.is_pit_out_lap) continue;
+        const boundary = nextSegStart ?? segEnd;
+        if (lap.date_start >= segStart && lap.date_start < boundary && lap.lap_duration < segFastest) {
+          segFastest = lap.lap_duration;
+        }
+      }
+      const segThreshold = isFinite(segFastest) ? segFastest * 1.07 : Infinity;
+      for (const lap of validLaps!) {
+        if (!lap.lap_duration || lap.is_pit_out_lap) continue;
+        if (lap.lap_duration > segThreshold) continue;
         const boundary = nextSegStart ?? segEnd;
         if (lap.date_start >= segStart && lap.date_start < boundary) {
           const cur = best.get(lap.driver_number);
@@ -342,19 +353,28 @@ export default function SessionAnalysisPage() {
       segBests.push(bestInSegment(starts[i], ends[i], starts[i + 1]));
     }
 
-    // Determine each driver's last segment (the furthest they advanced)
-    // and build segment-specific display times
+    // Determine each driver's last segment (the furthest they participated in).
+    // Check raw laps (not just valid competitive ones) so drivers whose times
+    // were deleted are still counted as having participated in that segment.
     const driverLastSeg = new Map<number, number>();
     for (const row of resultRows) {
       const dNum = row.driver.driver_number;
       for (let s = segCount - 1; s >= 0; s--) {
-        if (segBests[s].has(dNum)) {
+        const segStart = starts[s];
+        const boundary = starts[s + 1] ?? ends[s];
+        const participated = validLaps!.some(
+          (l) => l.driver_number === dNum && l.date_start >= segStart && l.date_start < boundary
+        );
+        if (participated) {
           driverLastSeg.set(dNum, s);
           break;
         }
       }
     }
 
+    // Display time = best valid time from the driver's last segment.
+    // If they participated but have no valid time (e.g. deleted for track limits),
+    // they won't appear in segmentTimes and will show "NO TIME".
     const segmentTimes = new Map<number, number>();
     for (const row of resultRows) {
       const dNum = row.driver.driver_number;
@@ -416,6 +436,7 @@ export default function SessionAnalysisPage() {
       q1CutoffTime,
       q2CutoffTime,
       segmentTimes,
+      driverLastSeg,
       q2KnockoutPos,
       q1KnockoutPos,
     };
