@@ -172,41 +172,42 @@ export default function SessionAnalysisPage() {
   const { data: drivers, error: drvErr } = useDrivers(sessionKey);
   const { data: raceControl } = useRaceControl(sessionKey, isLiveSession);
 
-  // Filter out deleted lap times using race control messages
+  // Filter out deleted lap times using race control messages.
+  // Match by driver + lap time (seconds) rather than lap number, because
+  // race control lap numbers are consistently off-by-one vs OpenF1.
   const validLaps = useMemo(() => {
     if (!laps) return null;
     if (!raceControl) return laps;
 
-    // Parse deleted laps from race control messages
-    const deletedKeys = new Set<string>();
-    const deletedByCarTime = new Map<string, string>();
+    // Parse "TIME m:ss.sss" to seconds
+    function parseTimeStr(t: string): number {
+      const parts = t.split(":");
+      return parseInt(parts[0]) * 60 + parseFloat(parts[1]);
+    }
+
+    // Track deleted times as Set<"driverNumber-seconds"> (rounded to 3dp)
+    const deletedTimes = new Set<string>();
 
     for (const msg of raceControl) {
       const carMatch = msg.message.match(/CAR (\d+)/);
-      if (!carMatch) continue;
+      const timeMatch = msg.message.match(/TIME ([\d:]+\.[\d]+)/);
+      if (!carMatch || !timeMatch) continue;
       const car = carMatch[1];
+      const secs = parseTimeStr(timeMatch[1]).toFixed(3);
+      const key = `${car}-${secs}`;
 
       if (msg.message.includes("DELETED")) {
-        const lapMatch = msg.message.match(/LAP (\d+)/);
-        const timeMatch = msg.message.match(/TIME ([\d:.]+)/);
-        if (lapMatch) {
-          const key = `${car}-${lapMatch[1]}`;
-          deletedKeys.add(key);
-          if (timeMatch) {
-            deletedByCarTime.set(`${car}-${timeMatch[1]}`, key);
-          }
-        }
+        deletedTimes.add(key);
       } else if (msg.message.includes("REINSTATED")) {
-        const timeMatch = msg.message.match(/TIME ([\d:.]+)/);
-        if (timeMatch) {
-          const restored = deletedByCarTime.get(`${car}-${timeMatch[1]}`);
-          if (restored) deletedKeys.delete(restored);
-        }
+        deletedTimes.delete(key);
       }
     }
 
-    if (deletedKeys.size === 0) return laps;
-    return laps.filter((l) => !deletedKeys.has(`${l.driver_number}-${l.lap_number}`));
+    if (deletedTimes.size === 0) return laps;
+    return laps.filter((l) => {
+      if (!l.lap_duration) return true;
+      return !deletedTimes.has(`${l.driver_number}-${l.lap_duration.toFixed(3)}`);
+    });
   }, [laps, raceControl]);
 
   // Enriched results (pass intervals + stints for the 10-column table)
