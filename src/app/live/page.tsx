@@ -77,16 +77,18 @@ export default function SessionAnalysisPage() {
   // All meetings for the dropdown (sorted most recent first)
   const sortedMeetings = useMemo(() => {
     if (!meetings) return [];
-    return [...meetings].sort(
-      (a, b) =>
-        parseISO(b.date_start).getTime() - parseISO(a.date_start).getTime()
-    );
+    return [...meetings]
+      .filter((m) => isPast(parseISO(m.date_start)))
+      .sort(
+        (a, b) =>
+          parseISO(b.date_start).getTime() - parseISO(a.date_start).getTime()
+      );
   }, [meetings]);
 
-  // Sessions for the dropdown — show all session types so users can pick freely
+  // Sessions for the dropdown — only show sessions that have started
   const availableSessions = useMemo(() => {
     if (!sessions) return [];
-    return sessions;
+    return sessions.filter((s) => isPast(parseISO(s.date_start)));
   }, [sessions]);
 
   // Auto-select latest completed GP meeting on first load
