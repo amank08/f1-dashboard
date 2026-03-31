@@ -35,12 +35,15 @@ export function useReplayState(
   const isPlayingRef = useRef(isPlaying);
 
   // Keep refs in sync
-  currentTimeRef.current = currentTime;
-  speedRef.current = speed;
-  isPlayingRef.current = isPlaying;
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+    speedRef.current = speed;
+    isPlayingRef.current = isPlaying;
+  });
 
   // Reset to start when minTime changes (new session loaded)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset state when prop changes
     setCurrentTime(minTime);
     setIsPlaying(false);
   }, [minTime]);

@@ -1,36 +1,106 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Undercut — F1 Dashboard
+
+A real-time Formula 1 data dashboard built with Next.js. Analyze sessions, compare drivers, replay races, and explore detailed timing data powered by the OpenF1 API.
+
+## Features
+
+- **Live Timing** — Real-time position updates, intervals, gaps, sector times, and tire tracking
+- **Session Replay** — Interactive replay with car positions on track, playback speed controls, and lap navigation
+- **Race Results** — Comprehensive results tables with grid vs finish, pit stops, and sector breakdowns
+- **Lap Analysis** — Lap time charts, position changes, gap-to-leader progression for up to 4 drivers
+- **Pit Strategy** — Tire strategy visualization with stint merging and degradation analysis
+- **Telemetry** — Speed, throttle, brake, RPM, gear, and DRS data per driver
+- **Weather** — Temperature, humidity, and rainfall tracking throughout sessions
+- **Team Radio** — Audio archive with playback for all team radio messages
+- **Race Control** — Flags, penalties, incidents, and safety car messages
+- **26 Circuits** — SVG track maps with sector divisions and DRS zones
+- **PWA Support** — Installable as a standalone app on mobile and desktop
+
+## Tech Stack
+
+- **Framework:** [Next.js](https://nextjs.org) 16 (App Router)
+- **Language:** TypeScript
+- **Styling:** Tailwind CSS v4
+- **Charts:** Recharts
+- **Data Fetching:** SWR with in-memory and disk caching
+- **Data Source:** [OpenF1 API](https://openf1.org)
+- **Icons:** Lucide React
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 20+
+- npm
+
+### Installation
+
+```bash
+git clone https://github.com/amank08/f1-dashboard.git
+cd f1-dashboard
+npm install
+```
+
+### Development
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Build
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+## Scripts
 
-To learn more about Next.js, take a look at the following resources:
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Production build |
+| `npm start` | Start production server |
+| `npm run lint` | Run ESLint |
+| `npm test` | Run tests (Vitest) |
+| `npm run test:watch` | Run tests in watch mode |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+  app/                  # Next.js App Router pages
+    live/               # Live session analysis + replay
+    race/[sessionKey]/  # Session-specific pages (laps, pitstops, radio, telemetry, weather)
+    api/f1/             # OpenF1 API proxy with caching
+  components/
+    charts/             # Recharts visualizations (11 chart types)
+    cards/              # Race, stat, and team radio cards
+    live/               # Timing board, circuit map, replay, podium
+    tables/             # Results table with sector times
+    selectors/          # Driver, season, and comparison selectors
+    ui/                 # Shared UI components (badge, skeleton, tabs)
+  lib/
+    data/               # Static circuit paths, DRS zones, tire allocations
+    hooks/              # SWR data-fetching hooks for each OpenF1 endpoint
+    openf1/             # API client, caching, rate limiting, types
+    utils/              # Formatters, colors, analytics, replay processing
+```
 
-## Deploy on Vercel
+## Testing
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Tests use [Vitest](https://vitest.dev) with React Testing Library. Run the suite with:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm test
+```
+
+## CI/CD
+
+GitHub Actions runs lint, test, and build on every push and pull request. [CodeRabbit](https://coderabbit.ai) provides automated code reviews on PRs.
+
+## License
+
+MIT

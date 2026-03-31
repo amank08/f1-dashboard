@@ -108,8 +108,9 @@ export function GridVsFinishChart({ data }: { data: GridVsFinishData[] }) {
           <Scatter
             data={data}
             fill="#E10600"
-            shape={(props: any) => {
+            shape={(props: { cx?: number; cy?: number; payload?: { teamColour: string } }) => {
               const { cx, cy, payload } = props;
+              if (cx == null || cy == null || !payload) return null;
               return (
                 <circle
                   cx={cx}

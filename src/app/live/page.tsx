@@ -101,6 +101,7 @@ export default function SessionAnalysisPage() {
     const latest = sortedMeetings[0];
 
     if (latest) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- auto-select from async data on mount
       setMeetingKey(latest.meeting_key);
       setAutoSelected(true);
     } else if (year > 2023) {
@@ -116,6 +117,7 @@ export default function SessionAnalysisPage() {
     if (!sessions || sessionsLoading || sessionKey) return;
     const latest = findLatestCompletedSession(sessions);
     if (latest) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- auto-select from async data on mount
       setSessionKey(latest.session_key);
     }
   }, [sessions, sessionsLoading, sessionKey]);

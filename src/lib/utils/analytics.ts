@@ -1,5 +1,4 @@
-import type { LapData, Position, RaceControlMessage, Session } from "@/lib/openf1/types";
-import { RACE_POINTS } from "./constants";
+import type { RaceControlMessage } from "@/lib/openf1/types";
 
 export interface DriverSeasonStats {
   driverNumber: number;

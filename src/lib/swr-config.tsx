@@ -48,6 +48,7 @@ export function SWRProvider({ children }: { children: React.ReactNode }) {
     for (const [key, value] of stored) {
       mapRef.current.set(key, value);
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration flag after loading localStorage
     setReady(true);
   }, []);
 

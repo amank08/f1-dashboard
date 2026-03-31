@@ -39,6 +39,7 @@ export function LabelEditor({ circuitKey }: { circuitKey: string }) {
 
   // Reset when circuit changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync derived state from prop change
     setLabels(pickLabels(CIRCUIT_PATHS[circuitKey].labels));
     setDragTarget(null);
   }, [circuitKey]);
