@@ -1,0 +1,28 @@
+language: en-US
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_placeholder: "@coderabbitai summary"
+  auto_title_placeholder: "@coderabbitai"
+  review_status: true
+  poem: false
+  collapse_walkthrough: false
+  sequence_diagrams: true
+  changed_files_summary: true
+  labeling_instructions: []
+  path_filters: []
+  path_instructions:
+    - path: "src/lib/**"
+      instructions: "Focus on type safety, error handling, and data validation. Flag any potential issues with OpenF1 API data handling."
+    - path: "src/components/**"
+      instructions: "Check for React best practices, proper hook usage, memoization where needed, and accessibility."
+    - path: "src/app/**"
+      instructions: "Verify proper use of Next.js App Router patterns, server/client component boundaries, and data fetching."
+  tools:
+    github-checks:
+      enabled: true
+    ast-grep:
+      enabled: true
+chat:
+  auto_reply: true
