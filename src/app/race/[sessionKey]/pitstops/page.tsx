@@ -8,6 +8,7 @@ import { useDrivers } from "@/lib/hooks/use-drivers";
 import { useLaps } from "@/lib/hooks/use-laps";
 import { useStints } from "@/lib/hooks/use-stints";
 import { usePitStops } from "@/lib/hooks/use-pit-stops";
+import { usePositions } from "@/lib/hooks/use-positions";
 import { PageHeader } from "@/components/layout/page-header";
 import { PitStrategyChart } from "@/components/charts/pit-strategy-chart";
 import { TireDegradationChart } from "@/components/charts/tire-degradation-chart";
@@ -30,10 +31,25 @@ export default function PitStopsPage({
   const { data: laps } = useLaps(sessionKeyNum);
   const { data: stints, isLoading: stintsLoading } = useStints(sessionKeyNum);
   const { data: pitStops, isLoading: pitsLoading } = usePitStops(sessionKeyNum);
+  const { data: positions } = usePositions(sessionKeyNum);
+
 
   const session = sessions?.[0];
   const isLoading = stintsLoading || pitsLoading;
   const totalLaps = laps ? Math.max(...laps.map((l) => l.lap_number), 0) : 0;
+
+  // Derive finishing order from positions (latest position per driver)
+  const finishOrder = (() => {
+    if (!positions) return undefined;
+    const sorted = [...positions].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+    const finalPos = new Map<number, number>();
+    for (const p of sorted) finalPos.set(p.driver_number, p.position);
+    return [...finalPos.entries()]
+      .sort(([, a], [, b]) => a - b)
+      .map(([dn]) => dn);
+  })();
 
   const driverLookup = new Map(
     drivers?.map((d) => [d.driver_number, d]) ?? []
@@ -69,6 +85,7 @@ export default function PitStopsPage({
             stints={stints}
             drivers={drivers}
             totalLaps={totalLaps}
+            finishOrder={finishOrder}
           />
         </div>
       )}

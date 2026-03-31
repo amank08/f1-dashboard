@@ -1,7 +1,11 @@
 import { getTyreAllocation } from "@/lib/data/tyre-allocations";
 import { TIRE_COLORS } from "@/lib/utils/colors";
 
-const ALL_COMPOUNDS = [1, 2, 3, 4, 5] as const;
+function getCompoundRange(year: number): number[] {
+  const count = year === 2025 ? 6 : 5;
+  return Array.from({ length: count }, (_, i) => i + 1);
+}
+
 
 const COMPOUND_LABELS: Record<string, { color: string; name: string }> = {
   hard: { color: TIRE_COLORS.HARD, name: "Hard" },
@@ -52,9 +56,9 @@ export function TyreAllocationCard({
         })}
       </div>
 
-      {/* Full C1-C5 scale */}
+      {/* Full compound scale */}
       <div className="mt-3 flex items-center gap-1">
-        {ALL_COMPOUNDS.map((c) => (
+        {getCompoundRange(year).map((c) => (
           <div
             key={c}
             className={`flex h-6 flex-1 items-center justify-center rounded text-[10px] font-semibold ${

@@ -18,39 +18,39 @@ export function CircuitMap({ circuitShortName }: CircuitMapProps) {
         aria-label={`Track map of ${circuit.name}`}
       >
         {/* Sector-colored track outline */}
-        {SECTOR_COLORS.map((color, i) => {
-          const offset = circuit.sectorLengths.slice(0, i).reduce((a, b) => a + b, 0);
-          const length = circuit.sectorLengths[i];
-          return (
-            <path
-              key={i}
-              d={circuit.path}
-              fill="none"
-              stroke={color}
-              strokeWidth={1.5}
-              strokeLinejoin="round"
-              pathLength={100}
-              strokeDasharray={`${length} ${100 - length}`}
-              strokeDashoffset={-offset}
-              strokeOpacity={0.85}
-            />
-          );
-        })}
-        {/* Start/finish line */}
+        {circuit.sectors.map((sectorPath, i) => (
+          <path
+            key={i}
+            d={sectorPath}
+            fill="none"
+            stroke={SECTOR_COLORS[i]}
+            strokeWidth={1}
+            strokeLinejoin="round"
+            strokeOpacity={0.85}
+          />
+        ))}
+        {/* Checkered start/finish line */}
+        <defs>
+          <pattern id="checker" width="1" height="1" patternUnits="userSpaceOnUse">
+            <rect width="0.5" height="0.5" fill="white" />
+            <rect x="0.5" y="0.5" width="0.5" height="0.5" fill="white" />
+            <rect x="0.5" width="0.5" height="0.5" fill="#222" />
+            <rect y="0.5" width="0.5" height="0.5" fill="#222" />
+          </pattern>
+        </defs>
         <line
           x1={circuit.sfLine.x1}
           y1={circuit.sfLine.y1}
           x2={circuit.sfLine.x2}
           y2={circuit.sfLine.y2}
-          stroke="white"
-          strokeWidth="1.5"
-          strokeLinecap="round"
+          stroke="url(#checker)"
+          strokeWidth="2"
+          strokeLinecap="butt"
         />
-        {/* Intermediate / speed trap tick marks */}
+        {/* Intermediate tick marks at sector boundaries */}
         {([
           { line: circuit.markers.i1, color: SECTOR_COLORS[0] },
           { line: circuit.markers.i2, color: SECTOR_COLORS[1] },
-          { line: circuit.markers.st, color: SECTOR_COLORS[2] },
         ] as const).map(({ line, color }, i) => (
           <line
             key={`marker-${i}`}
@@ -66,13 +66,11 @@ export function CircuitMap({ circuitShortName }: CircuitMapProps) {
         ))}
         {/* Sector labels with dark halo for separation from track */}
         {([
-          { pos: circuit.labels.sf, label: 'S/F', color: 'white', size: 5 },
           { pos: circuit.labels.s1, label: 'S1', color: SECTOR_COLORS[0], size: 5 },
           { pos: circuit.labels.s2, label: 'S2', color: SECTOR_COLORS[1], size: 5 },
           { pos: circuit.labels.s3, label: 'S3', color: SECTOR_COLORS[2], size: 5 },
           { pos: circuit.labels.i1, label: 'I1', color: SECTOR_COLORS[0], size: 3.5 },
           { pos: circuit.labels.i2, label: 'I2', color: SECTOR_COLORS[1], size: 3.5 },
-          { pos: circuit.labels.st, label: 'ST', color: SECTOR_COLORS[2], size: 3.5 },
         ] as const).map(({ pos, label, color, size }) => (
           <text
             key={label}

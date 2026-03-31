@@ -39,7 +39,7 @@ export default function RaceResultsPage({
 
   const results =
     positions && drivers && laps
-      ? buildResults(positions, drivers, laps)
+      ? buildResults(positions, drivers, laps, undefined, undefined, session?.session_type)
       : [];
 
   // Calculate stats
@@ -60,11 +60,11 @@ export default function RaceResultsPage({
   return (
     <div className="space-y-6">
       <Link
-        href={session ? `/calendar/${session.meeting_key}` : "/calendar"}
+        href="/live"
         className="inline-flex items-center gap-2 text-sm text-f1-text-secondary hover:text-f1-text transition-colors"
       >
         <ArrowLeft size={16} />
-        Back to Race Weekend
+        Back to Session Overview
       </Link>
 
       <PageHeader

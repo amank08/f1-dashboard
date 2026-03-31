@@ -28,6 +28,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils/cn";
 import { getPositionChanges } from "@/lib/utils/analytics";
+import { countryFlagUrl } from "@/lib/utils/formatters";
+import { CustomSelect } from "@/components/ui/custom-select";
 import type { Session } from "@/lib/openf1/types";
 
 const RACE_SESSION_TYPES = new Set([
@@ -74,11 +76,11 @@ export default function SessionAnalysisPage() {
     || meetingsError?.message?.includes("restricted")
     || false;
 
-  // All meetings for the dropdown (sorted most recent first)
+  // All meetings for the dropdown (sorted most recent first, excluding pre-season testing)
   const sortedMeetings = useMemo(() => {
     if (!meetings) return [];
     return [...meetings]
-      .filter((m) => isPast(parseISO(m.date_start)))
+      .filter((m) => isPast(parseISO(m.date_start)) && !m.meeting_name.toLowerCase().includes("testing"))
       .sort(
         (a, b) =>
           parseISO(b.date_start).getTime() - parseISO(a.date_start).getTime()
@@ -92,37 +94,22 @@ export default function SessionAnalysisPage() {
   }, [sessions]);
 
   // Auto-select latest completed GP meeting on first load
-  // Skip pre-season testing; fall back to previous year if no GPs completed
+  // Fall back to previous year if no GPs completed yet
   useEffect(() => {
     if (autoSelected || !meetings || meetingsLoading) return;
 
-    const completed = [...meetings]
-      .filter((m) => isPast(parseISO(m.date_start)))
-      .sort(
-        (a, b) =>
-          parseISO(b.date_start).getTime() - parseISO(a.date_start).getTime()
-      );
+    const latest = sortedMeetings[0];
 
-    // Prefer actual GP meetings over testing
-    const gp = completed.find(
-      (m) => !m.meeting_name.toLowerCase().includes("testing")
-    );
-
-    if (gp) {
-      setMeetingKey(gp.meeting_key);
+    if (latest) {
+      setMeetingKey(latest.meeting_key);
       setAutoSelected(true);
-    } else if (completed.length > 0) {
-      // Only testing sessions completed — try previous year
-      if (year > 2023) {
-        setYear(year - 1);
-        return;
-      }
-      setMeetingKey(completed[0].meeting_key);
-      setAutoSelected(true);
+    } else if (year > 2023) {
+      // No completed GPs this year — try previous year
+      setYear(year - 1);
     } else {
       setAutoSelected(true);
     }
-  }, [meetings, meetingsLoading, autoSelected, year]);
+  }, [meetings, meetingsLoading, autoSelected, year, sortedMeetings]);
 
   // Auto-select the latest completed session when sessions load
   useEffect(() => {
@@ -204,9 +191,14 @@ export default function SessionAnalysisPage() {
     }
 
     if (deletedTimes.size === 0) return laps;
-    return laps.filter((l) => {
-      if (!l.lap_duration) return true;
-      return !deletedTimes.has(`${l.driver_number}-${l.lap_duration.toFixed(3)}`);
+    return laps.map((l) => {
+      if (!l.lap_duration) return l;
+      if (deletedTimes.has(`${l.driver_number}-${l.lap_duration.toFixed(3)}`)) {
+        // Null out the duration so it's excluded from timing calculations,
+        // but keep the lap entry so it's still counted in laps completed.
+        return { ...l, lap_duration: null };
+      }
+      return l;
     });
   }, [laps, raceControl]);
 
@@ -214,8 +206,8 @@ export default function SessionAnalysisPage() {
   const resultRows = useMemo(() => {
     if (!drivers || !positions || !validLaps) return [];
     const sessionType = sessions?.find((s) => s.session_key === sessionKey)?.session_type;
-    return buildResults(positions, drivers, validLaps, intervals ?? undefined, stints ?? undefined, sessionType);
-  }, [positions, drivers, validLaps, intervals, stints, sessions, sessionKey]);
+    return buildResults(positions, drivers, validLaps, intervals ?? undefined, stints ?? undefined, sessionType, raceControl ?? undefined);
+  }, [positions, drivers, validLaps, intervals, stints, sessions, sessionKey, raceControl]);
 
   // Race summary stats
   const raceStats = useMemo(() => {
@@ -233,8 +225,14 @@ export default function SessionAnalysisPage() {
     }
     const changes = getPositionChanges(gridMap, finishMap);
 
-    // Total laps
-    const totalLaps = Math.max(...validLaps.map((l) => l.lap_number), 0);
+    // Total laps — prefer stint lap_end (actual race distance) over lap entries
+    // (which may have inconsistent phantom entries)
+    const stintMax = stints
+      ? Math.max(...stints.filter((s) => s.lap_end != null).map((s) => s.lap_end!), 0)
+      : 0;
+    const totalLaps = stintMax > 0
+      ? stintMax
+      : Math.max(...validLaps.map((l) => l.lap_number), 0);
 
     return {
       changes,
@@ -242,7 +240,7 @@ export default function SessionAnalysisPage() {
       finishMap,
       totalLaps,
     };
-  }, [drivers, validLaps, positions, resultRows]);
+  }, [drivers, validLaps, positions, resultRows, stints]);
 
   // Chart data for GridVsFinish
   const gridVsFinishData = useMemo(() => {
@@ -273,7 +271,7 @@ export default function SessionAnalysisPage() {
     }
     const filteredStints = stints.filter((s) => {
       const maxLap = maxLapByDriver.get(s.driver_number) ?? 0;
-      return s.lap_start <= maxLap;
+      return s.lap_start != null && s.lap_start <= maxLap;
     });
     return buildTimingData(
       drivers,
@@ -304,7 +302,7 @@ export default function SessionAnalysisPage() {
 
   // Qualifying: segment times, cutoffs, and knockout positions (all dynamic)
   const qualiCutoffs = useMemo(() => {
-    if (!isQualifying || !validLaps || !raceControl || !resultRows.length) return undefined;
+    if (!isQualifying || !validLaps || !laps || !raceControl || !resultRows.length) return undefined;
 
     // Parse qualifying segment boundaries (Q1/Q2/Q3) from race control.
     // Each segment ends with CHEQUERED FLAG. Red flags cause extra SESSION STARTED
@@ -359,21 +357,45 @@ export default function SessionAnalysisPage() {
     }
 
     // Determine each driver's last segment (the furthest they participated in).
-    // Check raw laps (not just valid competitive ones) so drivers whose times
-    // were deleted are still counted as having participated in that segment.
+    // Use raw laps so drivers whose times were deleted are still counted.
+    // Then use advancement logic to promote drivers who qualified for a later
+    // segment but didn't set laps in it (e.g. Bortoleto AUS 2026 — made Q3
+    // via Q2 results but didn't run in Q3).
     const driverLastSeg = new Map<number, number>();
     for (const row of resultRows) {
       const dNum = row.driver.driver_number;
       for (let s = segCount - 1; s >= 0; s--) {
         const segStart = starts[s];
         const boundary = starts[s + 1] ?? ends[s];
-        const participated = validLaps!.some(
+        const hasLap = laps!.some(
           (l) => l.driver_number === dNum && l.date_start >= segStart && l.date_start < boundary
         );
-        if (participated) {
+        if (hasLap) {
           driverLastSeg.set(dNum, s);
           break;
         }
+      }
+    }
+
+    // Promote drivers who qualified for a later segment based on advancement.
+    // Standard qualifying: top 15 from Q1 → Q2, top 10 from Q2 → Q3.
+    const ADVANCEMENT = [15, 10]; // Q1→Q2, Q2→Q3
+    for (let s = 0; s < segCount - 1; s++) {
+      const times = [...segBests[s].entries()].sort((a, b) => a[1] - b[1]);
+      const advanceCount = ADVANCEMENT[s] ?? 10;
+      const advancedDrivers = times.slice(0, advanceCount).map(([dNum]) => dNum);
+      for (const dNum of advancedDrivers) {
+        const cur = driverLastSeg.get(dNum);
+        if (cur === undefined || cur <= s) {
+          driverLastSeg.set(dNum, s + 1);
+        }
+      }
+    }
+
+    // Drivers with no data at all (DNS) default to Q1 — they never advanced.
+    for (const row of resultRows) {
+      if (!driverLastSeg.has(row.driver.driver_number)) {
+        driverLastSeg.set(row.driver.driver_number, 0);
       }
     }
 
@@ -444,8 +466,10 @@ export default function SessionAnalysisPage() {
       driverLastSeg,
       q2KnockoutPos,
       q1KnockoutPos,
+      segBests,
+      segCount,
     };
-  }, [isQualifying, validLaps, raceControl, resultRows]);
+  }, [isQualifying, validLaps, laps, raceControl, resultRows]);
 
   return (
     <div className="space-y-6">
@@ -471,19 +495,18 @@ export default function SessionAnalysisPage() {
       <div className="flex flex-wrap items-center gap-3">
         <SeasonSelector value={year} onChange={handleYearChange} />
 
-        <select
-          value={meetingKey ?? ""}
-          onChange={(e) => handleMeetingChange(Number(e.target.value))}
+        <CustomSelect
+          value={meetingKey?.toString() ?? ""}
+          onChange={(v) => handleMeetingChange(Number(v))}
           disabled={meetingsLoading || sortedMeetings.length === 0}
-          className={selectClasses}
-        >
-          {!meetingKey && <option value="">Select race weekend…</option>}
-          {sortedMeetings.map((m) => (
-            <option key={m.meeting_key} value={m.meeting_key}>
-              {m.meeting_name}
-            </option>
-          ))}
-        </select>
+          placeholder="Select race weekend…"
+          className="w-64"
+          options={sortedMeetings.map((m) => ({
+            value: String(m.meeting_key),
+            label: m.meeting_name,
+            iconUrl: countryFlagUrl(m.country_code),
+          }))}
+        />
 
         <select
           value={sessionKey ?? ""}

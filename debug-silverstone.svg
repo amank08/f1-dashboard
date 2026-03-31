@@ -1,0 +1,31 @@
+<svg viewBox="-5 -5 110 110" xmlns="http://www.w3.org/2000/svg" style="background:#1a1a2e">
+  <!-- S1 (red) -->
+  <path d="M 26.76 66.85 L 31.52 60.52 L 36.33 53.64 L 38.44 51.41 L 39.86 50.52 L 41.59 50.01 L 42.67 49.9 L 49.22 50.3 L 51.66 49.8 L 53.51 48.84 L 54.79 47.83 L 58.48 44.3 L 59.67 43.32 L 60.65 42.77 L 61.9 42.73 L 62.6 43.02 L 63.17 43.51 L 63.71 44.69 L 63.91 46.41 L 64.37 47.73 L 65.39 48.67 L 66.16 48.75 L 66.64 48.45 L 67.44 47.51 L 68.04 46.28 L 68.7 43.63 L 68.7 41.49 L 68.47 40.35 L 67.95 39.03 L 66.75 37.21 L 56.23 28.27 L 45.46 18.8" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linejoin="round" opacity="0.85"/>
+  <!-- S2 (blue) -->
+  <path d="M 45.46 18.8 L 42.2 16.62 L 40.77 16.3 L 38.89 16.52 L 37.71 17.29 L 37.05 18.37 L 36.36 22.51 L 35.38 23.7 L 34.39 24.15 L 33.01 23.89 L 32.17 23 L 31.71 21.8 L 31.68 20.3 L 32.06 18.58 L 35.02 13.15 L 38.31 9.87 L 42.04 7.85 L 47.32 6.68 L 63.36 5 L 65.59 5.48 L 67.17 6.33 L 68.33 7.31 L 69.39 8.83 L 70.31 11.07 L 71.57 16.54 L 72.35 27.32 L 72.75 29.58 L 74.97 36.33 L 74.88 39.17 L 73.93 43.8 L 74.03 45.33 L 76 49.32 L 76.39 51.28 L 75.86 53.22 L 75.09 54.42 L 74.13 55.31 L 70.98 57.29 L 69.04 59.49 L 67.53 62.06" fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-linejoin="round" opacity="0.85"/>
+  <!-- S3 (yellow) -->
+  <path d="M 67.53 62.06 L 57.57 82.6 L 53.64 90.03 L 52.18 92.25 L 51.01 93.53 L 49.85 94.35 L 48.02 94.97 L 47.04 95 L 45.36 94.56 L 43.63 93.33 L 42.8 92.34 L 40.78 88.8 L 38.36 85.41 L 35.18 81.48 L 32.61 78.79 L 31.47 78.3 L 30.5 78.32 L 28.94 79.3 L 27.96 79.63 L 26.15 79.01 L 25.06 77.88 L 23.93 75.83 L 23.63 74.26 L 23.63 72.99 L 23.91 71.49 L 24.31 70.5 L 26.49 67.21" fill="none" stroke="#eab308" stroke-width="1.5" stroke-linejoin="round" opacity="0.85"/>
+
+  <!-- S/F line -->
+  <line x1="28.76" y1="68.35" x2="24.76" y2="65.35" stroke="white" stroke-width="2"/>
+
+  <!-- I1 marker -->
+  <line x1="46.78" y1="17.3" x2="44.14" y2="20.3" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="45" y="16" fill="#ef4444" font-size="3" text-anchor="middle">I1</text>
+
+  <!-- I2 marker -->
+  <line x1="65.81" y1="61.05" x2="69.25" y2="63.07" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="68" y="59" fill="#3b82f6" font-size="3" text-anchor="middle">I2</text>
+
+  <!-- ST marker -->
+  <line x1="55.78" y1="81.71" x2="59.36" y2="83.49" stroke="#eab308" stroke-width="1"/>
+  <text x="58" y="80" fill="#eab308" font-size="3" text-anchor="middle">ST</text>
+
+  <!-- Sector labels -->
+  <text x="63" y="44" fill="#ef4444" font-size="5" text-anchor="middle" dominant-baseline="central" font-weight="bold" opacity="0.5">S1</text>
+  <text x="66" y="6" fill="#3b82f6" font-size="5" text-anchor="middle" dominant-baseline="central" font-weight="bold" opacity="0.5">S2</text>
+  <text x="46" y="95" fill="#eab308" font-size="5" text-anchor="middle" dominant-baseline="central" font-weight="bold" opacity="0.5">S3</text>
+
+  <!-- S/F label -->
+  <text x="27" y="63" fill="white" font-size="4" text-anchor="middle" font-weight="bold">S/F</text>
+</svg>

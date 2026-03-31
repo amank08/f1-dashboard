@@ -22,7 +22,17 @@ export async function GET(
     });
   }
 
-  // Rate limit then fetch
+  // Check disk cache before rate-limiting (avoids queuing for data we already have)
+  const ttl = getCacheTTL(endpoint[0]);
+  const diskData = diskCacheGet(cacheKey);
+  if (diskData) {
+    cache.set(cacheKey, diskData, ttl);
+    return NextResponse.json(diskData, {
+      headers: { "X-Cache": "DISK" },
+    });
+  }
+
+  // Rate limit then fetch from OpenF1
   await rateLimiter.acquire();
 
   const url = `${BASE_URL}/${path}?${searchParams.toString()}`;
@@ -33,17 +43,6 @@ export async function GET(
     if (cached) {
       return NextResponse.json(cached.data, {
         headers: { "X-Cache": "STALE" },
-      });
-    }
-
-    // Fall back to disk cache (persists across server restarts)
-    const diskData = diskCacheGet(cacheKey);
-    if (diskData) {
-      // Re-populate in-memory cache from disk
-      const ttl = getCacheTTL(endpoint[0]);
-      cache.set(cacheKey, diskData, ttl);
-      return NextResponse.json(diskData, {
-        headers: { "X-Cache": "DISK" },
       });
     }
 
@@ -63,7 +62,6 @@ export async function GET(
   const data = await response.json();
 
   // Cache in memory and on disk
-  const ttl = getCacheTTL(endpoint[0]);
   cache.set(cacheKey, data, ttl);
   diskCacheSet(cacheKey, data);
 

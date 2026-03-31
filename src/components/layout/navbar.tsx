@@ -2,16 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calendar, Trophy, Flag, Menu, X, Timer, BarChart3 } from "lucide-react";
+import { Flag, Menu, X, Timer } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils/cn";
 
 const NAV_ITEMS = [
   { href: "/", label: "Home", icon: Flag },
   { href: "/live", label: "Timing", icon: Timer },
-  { href: "/calendar", label: "Calendar", icon: Calendar },
-  { href: "/standings", label: "Standings", icon: Trophy },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
 ];
 
 export function Navbar() {
@@ -23,10 +20,10 @@ export function Navbar() {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded bg-f1-red font-bold text-white">
-            F1
+          <div className="flex h-8 w-8 items-center justify-center rounded bg-f1-red font-bold text-white text-xs">
+            UC
           </div>
-          <span className="text-lg font-bold tracking-tight">Dashboard</span>
+          <span className="text-lg font-bold tracking-tight">Undercut</span>
         </Link>
 
         {/* Desktop nav */}

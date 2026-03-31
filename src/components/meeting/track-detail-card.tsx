@@ -218,6 +218,17 @@ export function TrackDetailCard({
           strokeLinejoin="round"
         />
 
+        {/* Start/finish line */}
+        <line
+          x1={circuit.sfLine.x1}
+          y1={circuit.sfLine.y1}
+          x2={circuit.sfLine.x2}
+          y2={circuit.sfLine.y2}
+          stroke="white"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+
         {/* Zone overlays – polylines that follow the track curves */}
         {zones?.map((zone) => (
           <ZoneOverlay
@@ -286,6 +297,10 @@ export function TrackDetailCard({
                   </span>
                 </>
               )}
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-0.5 w-3 rounded bg-white" />
+                Start/finish
+              </span>
             </div>
           </div>
         )}

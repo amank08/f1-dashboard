@@ -1,7 +1,7 @@
 "use client";
 
 import type { Driver, Position, Interval, Stint, LapData } from "@/lib/openf1/types";
-import { getTeamColor, TIRE_COLORS } from "@/lib/utils/colors";
+import { getTeamColor, TIRE_COLORS, getTeamLogoUrl, getTeamLogoStyle } from "@/lib/utils/colors";
 import { formatLapTime } from "@/lib/utils/formatters";
 import { cn } from "@/lib/utils/cn";
 
@@ -32,7 +32,7 @@ function getSectorColor(
   bestOverall: number | null
 ): string {
   if (duration === null) return "text-f1-text-muted";
-  if (bestOverall !== null && duration <= bestOverall) return "text-purple-400";
+  if (bestOverall !== null && duration === bestOverall) return "text-purple-400";
   if (bestPersonal !== null && duration <= bestPersonal) return "text-green-400";
   return "text-yellow-400";
 }
@@ -48,6 +48,7 @@ interface TimingEntry {
   driverNumber: number;
   acronym: string;
   teamColour: string;
+  teamName: string;
   interval: number | string | null;
   gapToLeader: number | string | null;
   lastLap: number | null;
@@ -64,7 +65,8 @@ export function buildTimingData(
   positions: Position[],
   intervals: Interval[],
   stints: Stint[],
-  laps: LapData[]
+  laps: LapData[],
+  replayTimestamp?: number | null
 ): TimingEntry[] {
   // Get latest position per driver
   const latestPos = new Map<number, number>();
@@ -85,7 +87,7 @@ export function buildTimingData(
   const currentCompound = new Map<number, string>();
   const pitCounts = new Map<number, number>();
   for (const s of stints) {
-    currentCompound.set(s.driver_number, s.compound);
+    if (s.compound) currentCompound.set(s.driver_number, s.compound);
     pitCounts.set(s.driver_number, Math.max((pitCounts.get(s.driver_number) ?? 0), s.stint_number - 1));
   }
 
@@ -95,6 +97,10 @@ export function buildTimingData(
   const latestSectors = new Map<number, [number | null, number | null, number | null]>();
   const latestSegments = new Map<number, (number | null)[][]>();
   const personalBestSectors = new Map<number, SectorBests>();
+  // Track the expected mini-sector count per sector (max seen across all laps)
+  const sectorCounts = new Map<number, [number, number, number]>();
+  // Track latest lap metadata for time-based masking
+  const latestLapMeta = new Map<number, { dateStart: string; durations: [number | null, number | null, number | null] }>();
 
   for (const l of laps) {
     const dn = l.driver_number;
@@ -106,6 +112,16 @@ export function buildTimingData(
     if (l.duration_sector_3 !== null && (pb.s3 === null || l.duration_sector_3 < pb.s3)) pb.s3 = l.duration_sector_3;
     personalBestSectors.set(dn, pb);
 
+    // Remember mini-sector counts from any completed sector
+    const s1len = l.segments_sector_1?.length ?? 0;
+    const s2len = l.segments_sector_2?.length ?? 0;
+    const s3len = l.segments_sector_3?.length ?? 0;
+    const prev = sectorCounts.get(dn) ?? [0, 0, 0];
+    if (s1len > prev[0]) prev[0] = s1len;
+    if (s2len > prev[1]) prev[1] = s2len;
+    if (s3len > prev[2]) prev[2] = s3len;
+    sectorCounts.set(dn, prev);
+
     // Track latest sector times and segments (last lap in array)
     latestSectors.set(dn, [l.duration_sector_1, l.duration_sector_2, l.duration_sector_3]);
     latestSegments.set(dn, [
@@ -113,12 +129,91 @@ export function buildTimingData(
       l.segments_sector_2 ?? [],
       l.segments_sector_3 ?? [],
     ]);
+    latestLapMeta.set(dn, {
+      dateStart: l.date_start,
+      durations: [l.duration_sector_1, l.duration_sector_2, l.duration_sector_3],
+    });
 
     if (l.lap_duration === null || l.lap_duration <= 0) continue;
     lastLap.set(dn, l.lap_duration);
     const current = bestLap.get(dn);
     if (!current || l.lap_duration < current) {
       bestLap.set(dn, l.lap_duration);
+    }
+  }
+
+  // Pad incomplete segments with nulls and apply time-based masking for replay
+  for (const [dn, segs] of latestSegments) {
+    const counts = sectorCounts.get(dn);
+    if (!counts) continue;
+
+    // First, pad every sector to the expected count
+    for (let i = 0; i < 3; i++) {
+      const expected = counts[i];
+      if (expected > 0 && segs[i].length < expected) {
+        segs[i] = [
+          ...segs[i],
+          ...Array<null>(expected - segs[i].length).fill(null),
+        ];
+      }
+    }
+
+    // Time-based masking: during replay, reveal mini-sectors progressively
+    if (replayTimestamp != null) {
+      const meta = latestLapMeta.get(dn);
+      if (meta) {
+        const lapStart = new Date(meta.dateStart).getTime();
+        const elapsed = (replayTimestamp - lapStart) / 1000; // seconds into the lap
+
+        const [d1, d2, d3] = meta.durations;
+        // Cumulative sector boundaries (seconds)
+        const s1End = d1 ?? Infinity;
+        const s2End = s1End + (d2 ?? Infinity);
+        // s3End would be the full lap — anything past s2End is in sector 3
+
+        for (let si = 0; si < 3; si++) {
+          const sectorStart = si === 0 ? 0 : si === 1 ? s1End : s2End;
+          const sectorDuration = meta.durations[si];
+          const sectorLen = counts[si];
+          if (sectorLen === 0) continue;
+
+          if (elapsed <= sectorStart) {
+            // Haven't reached this sector yet — all gray
+            segs[si] = Array<null>(sectorLen).fill(null);
+          } else if (sectorDuration != null && elapsed < sectorStart + sectorDuration) {
+            // Partially through this sector — reveal proportionally
+            const inSector = elapsed - sectorStart;
+            const fraction = inSector / sectorDuration;
+            const revealCount = Math.floor(fraction * sectorLen);
+            segs[si] = segs[si].map((v, idx) => (idx < revealCount ? v : null));
+          }
+          // else: sector fully elapsed — show all segments as-is
+        }
+      }
+    }
+  }
+
+  // Time-based masking for sector duration columns (S1/S2/S3)
+  // Null-out sector times for sectors the driver hasn't completed yet
+  if (replayTimestamp != null) {
+    for (const [dn, sectors] of latestSectors) {
+      const meta = latestLapMeta.get(dn);
+      if (!meta) continue;
+
+      const lapStart = new Date(meta.dateStart).getTime();
+      const elapsed = (replayTimestamp - lapStart) / 1000;
+
+      const [d1, d2, d3] = meta.durations;
+      const s1End = d1 ?? Infinity;
+      const s2End = s1End + (d2 ?? Infinity);
+      const s3End = s2End + (d3 ?? Infinity);
+
+      // S1: show only if elapsed >= s1End (sector 1 fully completed)
+      if (elapsed < s1End) sectors[0] = null;
+      // S2: show only if elapsed >= s2End (sector 2 fully completed)
+      if (elapsed < s2End) sectors[1] = null;
+      // S3: show only if elapsed >= s3End (sector 3 fully completed)
+      if (elapsed < s3End) sectors[2] = null;
     }
   }
 
@@ -135,6 +230,7 @@ export function buildTimingData(
       driverNumber: driverNum,
       acronym: driver.name_acronym,
       teamColour: driver.team_colour,
+      teamName: driver.team_name,
       interval: intv?.interval ?? null,
       gapToLeader: intv?.gap ?? null,
       lastLap: lastLap.get(driverNum) ?? null,
@@ -152,21 +248,27 @@ export function buildTimingData(
 
 function MiniSectors({ segments }: { segments: (number | null)[][] }) {
   const allSegments = segments.flat();
-  if (allSegments.length === 0 || allSegments.every((s) => s === null)) return null;
+  if (allSegments.length === 0) return null;
 
   return (
     <div className="flex gap-px">
-      {segments.map((sector, si) => (
-        <div key={si} className={cn("flex gap-px", si > 0 && "ml-1")}>
-          {sector.map((seg, mi) => (
-            <div
-              key={`${si}-${mi}`}
-              className="h-3 w-1.5 rounded-[1px]"
-              style={{ backgroundColor: getSegmentColor(seg) }}
-            />
-          ))}
-        </div>
-      ))}
+      {segments.map((sector, si) => {
+        // Drop the leading null that OpenF1 returns for the S1 detection point
+        const trimmed = sector.length > 0 && sector[0] === null
+          ? sector.slice(1)
+          : sector;
+        return (
+          <div key={si} className={cn("flex gap-px", si > 0 && "ml-1")}>
+            {trimmed.map((seg, mi) => (
+              <div
+                key={`${si}-${mi}`}
+                className="h-3 w-1.5 rounded-[1px]"
+                style={{ backgroundColor: getSegmentColor(seg) }}
+              />
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -228,9 +330,21 @@ export function TimingBoard({ entries }: { entries: TimingEntry[] }) {
                 <td className="px-2 py-2">
                   <div className="flex items-center gap-2">
                     <div
-                      className="h-5 w-1 rounded-full"
-                      style={{ backgroundColor: getTeamColor(entry.teamColour) }}
-                    />
+                      className="relative flex h-6 w-6 items-center justify-center rounded-full"
+                      style={{ backgroundColor: getTeamColor(entry.teamColour, entry.teamName) }}
+                    >
+                      {(() => {
+                        const logoUrl = getTeamLogoUrl(entry.teamName);
+                        return logoUrl ? (
+                          <img
+                            src={logoUrl}
+                            alt={entry.teamName}
+                            className="h-4 w-4 object-contain"
+                            style={getTeamLogoStyle(entry.teamName)}
+                          />
+                        ) : null;
+                      })()}
+                    </div>
                     <span className="font-bold">{entry.acronym}</span>
                   </div>
                 </td>
@@ -278,7 +392,7 @@ export function TimingBoard({ entries }: { entries: TimingEntry[] }) {
                 <td className="px-2 py-2 text-center">
                   {entry.compound && (
                     <span
-                      className="inline-block rounded px-1.5 py-0.5 text-xs font-bold"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold"
                       style={{
                         color: TIRE_COLORS[entry.compound as keyof typeof TIRE_COLORS] ?? "#888",
                         backgroundColor: `${TIRE_COLORS[entry.compound as keyof typeof TIRE_COLORS] ?? "#888"}20`,

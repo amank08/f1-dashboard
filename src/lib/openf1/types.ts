@@ -80,9 +80,9 @@ export interface Stint {
   session_key: number;
   stint_number: number;
   driver_number: number;
-  lap_start: number;
-  lap_end: number;
-  compound: TireCompound;
+  lap_start: number | null;
+  lap_end: number | null;
+  compound: TireCompound | null;
   tyre_age_at_start: number;
 }
 

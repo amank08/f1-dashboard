@@ -19,6 +19,9 @@ export function computeTireDegradation(
   for (const stint of driverStints) {
     for (const lap of driverLaps) {
       if (
+        stint.lap_start != null &&
+        stint.lap_end != null &&
+        stint.compound != null &&
         lap.lap_number >= stint.lap_start &&
         lap.lap_number <= stint.lap_end &&
         lap.lap_duration !== null &&

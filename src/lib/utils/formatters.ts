@@ -30,3 +30,18 @@ export function formatDuration(seconds: number | null): string {
   if (seconds === null || seconds === undefined) return "—";
   return `${seconds.toFixed(1)}s`;
 }
+
+/** Convert an OpenF1 country_code (alpha-3 / non-standard) to ISO alpha-2. */
+const ALPHA3_TO_ALPHA2: Record<string, string> = {
+  AUS: "AU", AUT: "AT", AZE: "AZ", BEL: "BE", BRA: "BR", BRN: "BH",
+  CAN: "CA", CHN: "CN", ESP: "ES", GBR: "GB", HUN: "HU", ITA: "IT",
+  JPN: "JP", KSA: "SA", MEX: "MX", MON: "MC", NED: "NL", QAT: "QA",
+  SGP: "SG", UAE: "AE", USA: "US", FRA: "FR", POR: "PT", TUR: "TR",
+  RSA: "ZA", ARE: "AE", SAU: "SA", MCO: "MC",
+};
+
+/** Get a flag image URL for an OpenF1 country_code. */
+export function countryFlagUrl(countryCode: string): string {
+  const alpha2 = (ALPHA3_TO_ALPHA2[countryCode] ?? countryCode.slice(0, 2)).toLowerCase();
+  return `https://flagcdn.com/w40/${alpha2}.png`;
+}

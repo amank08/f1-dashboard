@@ -1,6 +1,6 @@
 "use client";
 
-import type { Driver, LapData, Position, Interval, Stint } from "@/lib/openf1/types";
+import type { Driver, LapData, Position, Interval, Stint, RaceControlMessage } from "@/lib/openf1/types";
 import { formatLapTime } from "@/lib/utils/formatters";
 import { getTeamColor, TIRE_COLORS, getTeamLogoUrl, getTeamLogoStyle } from "@/lib/utils/colors";
 import { cn } from "@/lib/utils/cn";
@@ -36,7 +36,8 @@ export function buildResults(
   laps: LapData[],
   intervals?: Interval[],
   stints?: Stint[],
-  sessionType?: string
+  sessionType?: string,
+  raceControl?: RaceControlMessage[]
 ): ResultRow[] {
   // Get final position for each driver
   const finalPositions = new Map<number, number>();
@@ -62,6 +63,15 @@ export function buildResults(
   const driverLookup = new Map<number, Driver>();
   for (const d of drivers) {
     driverLookup.set(d.driver_number, d);
+  }
+
+  // Drivers with no position data at all (DNS for qualifying/practice) —
+  // add them at the end so they appear on the timing board.
+  let nextPos = finalPositions.size + 1;
+  for (const d of drivers) {
+    if (!finalPositions.has(d.driver_number)) {
+      finalPositions.set(d.driver_number, nextPos++);
+    }
   }
 
   // For non-race sessions, compute a 107% threshold to discard in-laps / out-laps.
@@ -117,19 +127,40 @@ export function buildResults(
     }
   }
 
-  // Max lap per driver
+  // Max lap per driver (only count laps with actual timing data;
+  // OpenF1 creates phantom post-race entries with null durations)
   const maxLaps = new Map<number, number>();
   for (const lap of laps) {
+    if (
+      !lap.lap_duration &&
+      !lap.duration_sector_1 &&
+      !lap.duration_sector_2 &&
+      !lap.duration_sector_3 &&
+      lap.i1_speed == null &&
+      lap.i2_speed == null &&
+      lap.st_speed == null
+    ) continue;
     const cur = maxLaps.get(lap.driver_number) ?? 0;
     if (lap.lap_number > cur) maxLaps.set(lap.driver_number, lap.lap_number);
   }
 
-  // DNF/DNS detection
+  // Actual race distance from stint data (max lap_end). More reliable than lap
+  // entries because phantom laps are inconsistent — some races have phantoms matching
+  // race distance (AUS 2026 lap 58), others have bogus post-race entries beyond it
+  // (SIN 2023 lap 63 in a 62-lap race). Used for display only.
+  const totalRaceLaps = stints
+    ? Math.max(...stints.filter((s) => s.lap_end != null).map((s) => s.lap_end!), 0)
+    : 0;
+
+  // DNF/DNS detection — use maxLaps (timed) for internally consistent classification.
+  // All lead-lap finishers share the same maxLaps value, so comparisons are safe.
   const leaderLaps = Math.max(...maxLaps.values(), 0);
   const dnfThreshold = Math.floor(leaderLaps * 0.9);
   // DNS detection: drivers with no timed racing data (lap duration, sector times, or speed traps).
-  // Mini-sector segments are excluded — they record during formation laps too.
   // Speed traps (i1/i2/st) only activate once the race starts, so DNS drivers won't have them.
+  // Stints alone are NOT sufficient — formation lap crashers (e.g. Hadjar AUS 2025) get a
+  // stint entry but never took the race start. Require at least one counted lap (maxLaps >= 1)
+  // to also count stint data as proof of starting.
   const hasRacingData = new Set<number>();
   for (const lap of laps) {
     if (
@@ -144,9 +175,68 @@ export function buildResults(
       hasRacingData.add(lap.driver_number);
     }
   }
+  // Drivers with stint data AND at least one counted lap started the race —
+  // covers drivers who crash before the first speed trap (e.g. Doohan AUS 2025).
+  // If a driver has NO lap entries at all but has a stint with actual lap numbers,
+  // they started but crashed before any lap was recorded (e.g. Doohan MIA 2025).
+  // Drivers WITH lap entries but no timing data are handled by the segments check
+  // below (avoids false positives for grid stalls like Hulkenberg AUS 2026).
+  if (stints) {
+    const driversWithLaps = new Set(laps.map((l) => l.driver_number));
+    for (const s of stints) {
+      if (maxLaps.has(s.driver_number)) {
+        hasRacingData.add(s.driver_number);
+      } else if (s.lap_start != null && !driversWithLaps.has(s.driver_number)) {
+        hasRacingData.add(s.driver_number);
+      }
+    }
+  }
+  // Formation lap completion check: if a driver completed ALL mini-sectors on the
+  // track (not pit lane) on any lap, they were on the grid for the race start.
+  // Segment value 2064 = pit lane; drivers who pit at end of formation lap are DNS
+  // (e.g. Sainz AUT 2025). DNS drivers who crash during formation lap have zeros
+  // (e.g. Hadjar AUS 2025). This catches drivers who started but crashed before
+  // any timing data was recorded (e.g. Gasly SAU 2025 — crashed T5 on lap 1).
+  for (const lap of laps) {
+    if (hasRacingData.has(lap.driver_number)) continue;
+    const segs = [
+      ...(lap.segments_sector_1 ?? []),
+      ...(lap.segments_sector_2 ?? []),
+      ...(lap.segments_sector_3 ?? []),
+    ];
+    if (segs.length > 0 && segs.every((s) => s > 0 && s !== 2064)) {
+      hasRacingData.add(lap.driver_number);
+    }
+  }
+
+  // Parse unserved time penalties so we can detect live penalty jumps in the gap data.
+  // OpenF1 applies penalties live to gap_to_leader (e.g., gap jumps +5s after the flag).
+  // We undo these jumps to recover the on-track finishing order.
+  const isRace = sessionType === "Race" || sessionType === "Sprint";
+  const livePenalties = new Map<number, number>();
+  if (isRace && raceControl) {
+    const all = new Map<number, number>();
+    const served = new Map<number, number>();
+    for (const msg of raceControl) {
+      const m = msg.message.match(/(\d+) SECOND TIME PENALTY FOR CAR (\d+)/);
+      if (!m) continue;
+      const secs = parseInt(m[1], 10);
+      const car = parseInt(m[2], 10);
+      if (msg.message.includes("SERVED")) {
+        served.set(car, (served.get(car) ?? 0) + secs);
+      } else {
+        all.set(car, (all.get(car) ?? 0) + secs);
+      }
+    }
+    for (const [car, total] of all) {
+      const s = served.get(car) ?? 0;
+      if (total - s > 0) livePenalties.set(car, total - s);
+    }
+  }
 
   // Latest interval per driver (sort by date to ensure we get the final value)
   // Prefer non-null values: post-race entries sometimes have null gap_to_leader
+  // Skip entries where the gap jumps by a live penalty amount (OpenF1 bakes penalties into gaps)
   const latestInterval = new Map<number, { interval: number | string | null; gap: number | string | null }>();
   if (intervals) {
     const sorted = [...intervals].sort(
@@ -154,9 +244,21 @@ export function buildResults(
     );
     for (const i of sorted) {
       const prev = latestInterval.get(i.driver_number);
+      const gap = i.gap_to_leader ?? prev?.gap ?? null;
+
+      // Detect live penalty application: gap suddenly increases by ~penalty amount
+      const penalty = livePenalties.get(i.driver_number);
+      if (penalty && typeof gap === "number" && typeof prev?.gap === "number") {
+        const jump = gap - (prev.gap as number);
+        if (Math.abs(jump - penalty) < 0.5) {
+          // Skip — this is the timing system applying the penalty to the gap
+          continue;
+        }
+      }
+
       latestInterval.set(i.driver_number, {
         interval: i.interval ?? prev?.interval ?? null,
-        gap: i.gap_to_leader ?? prev?.gap ?? null,
+        gap,
       });
     }
   }
@@ -168,7 +270,7 @@ export function buildResults(
   if (stints) {
     const stintsByDriver = new Map<number, Stint[]>();
     for (const s of stints) {
-      currentCompound.set(s.driver_number, s.compound);
+      if (s.compound) currentCompound.set(s.driver_number, s.compound);
       if (!stintsByDriver.has(s.driver_number)) stintsByDriver.set(s.driver_number, []);
       stintsByDriver.get(s.driver_number)!.push(s);
     }
@@ -179,7 +281,7 @@ export function buildResults(
         const prev = driverStints[i - 1];
         const curr = driverStints[i];
         const sameCompound = curr.compound === prev.compound;
-        const prevDuration = prev.lap_end - prev.lap_start + 1;
+        const prevDuration = (prev.lap_end ?? 0) - (prev.lap_start ?? 0) + 1;
         const isGhost = sameCompound && (curr.tyre_age_at_start > 0 || prevDuration <= 2);
         if (!isGhost) realStops++;
       }
@@ -217,25 +319,29 @@ export function buildResults(
       }
       row.gridPosition = gridPos;
       row.positionsGained = gridPos !== null ? gridPos - position : null;
-      row.lapsCompleted = maxLaps.get(driverNum) ?? null;
       row.compound = currentCompound.get(driverNum) ?? null;
       row.pitCount = pitCounts.get(driverNum) ?? null;
       row.bestS1 = bestS1.get(driverNum) ?? null;
       row.bestS2 = bestS2.get(driverNum) ?? null;
       row.bestS3 = bestS3.get(driverNum) ?? null;
-      const laps = row.lapsCompleted ?? 0;
-      const isRace = sessionType === "Race" || sessionType === "Sprint";
+      const driverLaps = maxLaps.get(driverNum) ?? 0;
       if (isRace && leaderLaps > 0) {
         if (!hasRacingData.has(driverNum)) {
           row.status = "DNS";
-        } else if (laps < dnfThreshold) {
+        } else if (driverLaps < dnfThreshold) {
           row.status = "DNF";
-        } else if (laps < leaderLaps) {
+        } else if (driverLaps < leaderLaps) {
           row.status = "Lapped";
         } else {
           row.status = "Finished";
         }
       }
+      // Display: finishers show totalRaceLaps (actual race distance from stints),
+      // others show their timed max lap. Fixes races where the leader's final lap
+      // has no timing data (e.g. AUS 2026: 57 timed laps but race was 58).
+      row.lapsCompleted = row.status === "Finished" && totalRaceLaps > 0
+        ? totalRaceLaps
+        : driverLaps || null;
       const flSectors = fastestLapSectors.get(driverNum);
       if (flSectors) {
         row.fastestLapS1 = flSectors[0];
@@ -247,10 +353,41 @@ export function buildResults(
     results.push(row);
   }
 
-  // Sort: Finished/Lapped by position, then DNF by position, then DNS by position
+  // For race sessions with corrected gaps, re-sort classified drivers by gap
+  // (position data may still reflect the live penalty order)
   const statusOrder = (s?: string) => s === "DNS" ? 2 : s === "DNF" ? 1 : 0;
-  results.sort((a, b) => statusOrder(a.status) - statusOrder(b.status) || a.position - b.position);
-  // Renumber positions and recalculate positionsGained after status-based reordering
+  if (isRace && livePenalties.size > 0) {
+    const classified = results.filter(r => r.status === "Finished" || r.status === "Lapped");
+    // Sort by gap: numeric gaps first (ascending), then lapped drivers by
+    // laps completed (descending) then position (ascending) as tiebreaker.
+    function gapSortKey(r: ResultRow): number {
+      if (typeof r.gapToLeader === "number") return r.gapToLeader;
+      if (r.gapToLeader == null) return -1; // leader
+      // String gaps like "+1 LAP", "+2 LAPS" — parse lap count
+      const m = r.gapToLeader.match(/\+(\d+)\s+LAP/);
+      if (m) return 1e6 + parseInt(m[1], 10) * 1e3 + r.position;
+      return Infinity;
+    }
+    classified.sort((a, b) => gapSortKey(a) - gapSortKey(b));
+    // Recalculate intervals from sorted gaps
+    if (classified.length > 0) {
+      classified[0].gapToLeader = null;
+      classified[0].interval = null;
+      for (let i = 1; i < classified.length; i++) {
+        const prevGap = typeof classified[i - 1].gapToLeader === "number" ? (classified[i - 1].gapToLeader as number) : 0;
+        const curGap = typeof classified[i].gapToLeader === "number" ? (classified[i].gapToLeader as number) : 0;
+        classified[i].interval = +(curGap - prevGap).toFixed(3);
+      }
+    }
+    const dnf = results.filter(r => r.status === "DNF").sort((a, b) => a.position - b.position);
+    const dns = results.filter(r => r.status === "DNS").sort((a, b) => a.position - b.position);
+    results.length = 0;
+    results.push(...classified, ...dnf, ...dns);
+  } else {
+    results.sort((a, b) => statusOrder(a.status) - statusOrder(b.status) || a.position - b.position);
+  }
+
+  // Renumber positions and recalculate positionsGained
   for (let i = 0; i < results.length; i++) {
     results[i].position = i + 1;
     if (results[i].gridPosition != null) {
@@ -336,6 +473,9 @@ export function ResultsTable({
     driverLastSeg: Map<number, number>;
     q2KnockoutPos: number | null;
     q1KnockoutPos: number | null;
+    /** Best lap time per driver per segment (Q1=0, Q2=1, Q3=2) */
+    segBests: Map<number, number>[];
+    segCount: number;
   };
 }) {
   const overallFastest = Math.min(
@@ -520,13 +660,18 @@ export function ResultsTable({
       return `+${delta.toFixed(3)}`;
     }
 
-    // Fastest segment time for purple highlighting
-    const segFastest = segTimes
-      ? Math.min(...results.map((r) => segTimes.get(r.driver.driver_number) ?? Infinity))
-      : overallFastest;
+    const segBests = qualiCutoffs?.segBests ?? [];
+    const segCount = qualiCutoffs?.segCount ?? 0;
 
-    const colCount = 8;
-    // Qualifying layout: POS | DRIVER | GAP | FASTEST LAP | S1 | S2 | S3 | TIRE
+    // Best time per segment for purple highlighting
+    const segFastestTimes: (number | null)[] = [];
+    for (let s = 0; s < segCount; s++) {
+      const times = [...(segBests[s]?.values() ?? [])];
+      segFastestTimes.push(times.length ? Math.min(...times) : null);
+    }
+
+    const colCount = 3 + segCount + 1; // POS + DRIVER + GAP + Q1/Q2/Q3 + TIRE
+    // Qualifying layout: POS | DRIVER | GAP | Q1 | Q2 | Q3 | TIRE
     // with Q1/Q2 knockout separator rows
     return (
       <div className="overflow-x-auto rounded-lg border border-f1-border">
@@ -536,10 +681,10 @@ export function ResultsTable({
               <th className="px-3 py-3 text-center w-10">POS</th>
               <th className="px-3 py-3 text-left">DRIVER</th>
               <th className="px-3 py-3 text-right">GAP</th>
-              <th className="px-3 py-3 text-right">FASTEST LAP</th>
-              <th className="px-3 py-3 text-right">S1</th>
-              <th className="px-3 py-3 text-right">S2</th>
-              <th className="px-3 py-3 text-right">S3</th>
+              {Array.from({ length: segCount }, (_, i) => {
+                const s = segCount - 1 - i;
+                return <th key={s} className="px-3 py-3 text-right">Q{s + 1}</th>;
+              })}
               <th className="px-3 py-3 text-center">TIRE</th>
             </tr>
           </thead>
@@ -551,7 +696,7 @@ export function ResultsTable({
                 elements.push(
                   <tr key="q2-sep" className="bg-f1-card/60">
                     <td colSpan={colCount} className="px-3 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-f1-text-muted">
-                      Knocked out in Q2
+                      Knocked out in Q2{q2CutoffTime != null && <span className="ml-2 font-mono">{formatLapTime(q2CutoffTime)}</span>}
                     </td>
                   </tr>
                 );
@@ -560,14 +705,16 @@ export function ResultsTable({
                 elements.push(
                   <tr key="q1-sep" className="bg-f1-card/60">
                     <td colSpan={colCount} className="px-3 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-f1-text-muted">
-                      Knocked out in Q1
+                      Knocked out in Q1{q1CutoffTime != null && <span className="ml-2 font-mono">{formatLapTime(q1CutoffTime)}</span>}
                     </td>
                   </tr>
                 );
               }
+              const dNum = row.driver.driver_number;
+              const lastSeg = qualiCutoffs?.driverLastSeg?.get(dNum) ?? -1;
               elements.push(
                 <tr
-                  key={row.driver.driver_number}
+                  key={dNum}
                   className="border-b border-f1-border/50 bg-f1-surface hover:bg-f1-card transition-colors"
                 >
                   <td className="px-3 py-2.5 text-center">
@@ -579,40 +726,29 @@ export function ResultsTable({
                   <td className="px-3 py-2.5 text-right font-mono text-f1-text-secondary">
                     {getQualiGap(row)}
                   </td>
-                  <td className="px-3 py-2.5 text-right">
-                    {(() => {
-                      const qualiTime = getQualiLapTime(row);
-                      if (qualiTime == null && qualiCutoffs?.driverLastSeg?.has(row.driver.driver_number)) {
-                        return <span className="font-mono text-f1-text-muted">NO TIME</span>;
-                      }
-                      return (
-                        <span
-                          className={cn(
-                            "font-mono",
-                            qualiTime === segFastest && "text-purple-400 font-bold"
-                          )}
-                        >
-                          {formatLapTime(qualiTime)}
-                        </span>
-                      );
-                    })()}
-                  </td>
-                  {(() => {
-                    const noTime = getQualiLapTime(row) == null && qualiCutoffs?.driverLastSeg?.has(row.driver.driver_number);
+                  {Array.from({ length: segCount }, (_, i) => {
+                    const s = segCount - 1 - i;
+                    const time = segBests[s]?.get(dNum) ?? null;
+                    const fastest = segFastestTimes[s];
+                    const participated = lastSeg >= s;
+                    if (!participated) {
+                      return <td key={s} className="px-3 py-2.5 text-right font-mono text-xs text-f1-text-muted">—</td>;
+                    }
+                    if (time == null) {
+                      return <td key={s} className="px-3 py-2.5 text-right font-mono text-xs text-f1-text-muted">NO TIME</td>;
+                    }
                     return (
-                      <>
-                        <td className={cn("px-3 py-2.5 text-right font-mono text-xs", !noTime && getSectorColor(row.fastestLapS1 ?? null, isFinite(overallBestS1) ? overallBestS1 : null, row.bestS1 ?? null))}>
-                          {noTime ? "—" : row.fastestLapS1 != null ? row.fastestLapS1.toFixed(3) : "—"}
-                        </td>
-                        <td className={cn("px-3 py-2.5 text-right font-mono text-xs", !noTime && getSectorColor(row.fastestLapS2 ?? null, isFinite(overallBestS2) ? overallBestS2 : null, row.bestS2 ?? null))}>
-                          {noTime ? "—" : row.fastestLapS2 != null ? row.fastestLapS2.toFixed(3) : "—"}
-                        </td>
-                        <td className={cn("px-3 py-2.5 text-right font-mono text-xs", !noTime && getSectorColor(row.fastestLapS3 ?? null, isFinite(overallBestS3) ? overallBestS3 : null, row.bestS3 ?? null))}>
-                          {noTime ? "—" : row.fastestLapS3 != null ? row.fastestLapS3.toFixed(3) : "—"}
-                        </td>
-                      </>
+                      <td
+                        key={s}
+                        className={cn(
+                          "px-3 py-2.5 text-right font-mono text-xs",
+                          fastest != null && time === fastest && "text-purple-400 font-bold"
+                        )}
+                      >
+                        {formatLapTime(time)}
+                      </td>
                     );
-                  })()}
+                  })}
                   <td className="px-3 py-2.5 text-center">
                     {row.compound && (
                       <span
