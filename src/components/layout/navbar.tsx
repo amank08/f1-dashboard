@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Flag, Menu, X, Timer } from "lucide-react";
+import { Flag, Menu, X, Timer, Trophy, CalendarDays } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils/cn";
 
 const NAV_ITEMS = [
   { href: "/", label: "Home", icon: Flag },
   { href: "/live", label: "Timing", icon: Timer },
+  { href: "/standings", label: "Standings", icon: Trophy },
+  { href: "/calendar", label: "Calendar", icon: CalendarDays },
 ];
 
 export function Navbar() {
