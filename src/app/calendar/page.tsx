@@ -34,8 +34,11 @@ export default function CalendarPage() {
     sessionsByMeeting.set(s.meeting_key, list);
   }
 
-  const completedCount = meetings?.filter((m) => isPast(parseISO(m.date_end))).length ?? 0;
-  const totalCount = meetings?.length ?? 0;
+  const raceMeetings = meetings?.filter(
+    (m) => !m.meeting_name.toLowerCase().includes("testing")
+  );
+  const completedCount = raceMeetings?.filter((m) => isPast(parseISO(m.date_end))).length ?? 0;
+  const totalCount = raceMeetings?.length ?? 0;
 
   return (
     <div className="space-y-6">
@@ -57,9 +60,9 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {meetings && (
+      {raceMeetings && (
         <div className="space-y-2">
-          {meetings.map((meeting, i) => {
+          {raceMeetings.map((meeting, i) => {
             const start = parseISO(meeting.date_start);
             const end = parseISO(meeting.date_end);
             const isPastRace = isPast(end);
