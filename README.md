@@ -89,6 +89,22 @@ src/
     utils/              # Formatters, colors, analytics, replay processing
 ```
 
+## Docker
+
+```bash
+docker compose up --build
+```
+
+This builds a multi-stage production image and runs the app at [http://localhost:3000](http://localhost:3000).
+
+## Deployment
+
+The project is configured for [Vercel](https://vercel.com). Connect your GitHub repo at [vercel.com/new](https://vercel.com/new) to get:
+
+- Automatic production deploys on push to `main`
+- Preview deploys on every pull request
+- Edge caching for API routes
+
 ## Testing
 
 Tests use [Vitest](https://vitest.dev) with React Testing Library. Run the suite with:
