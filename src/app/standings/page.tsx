@@ -5,8 +5,28 @@ import { SeasonSelector } from "@/components/selectors/season-selector";
 import { PageHeader } from "@/components/layout/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useStandings } from "@/lib/hooks/use-standings";
-import { getTeamColor } from "@/lib/utils/colors";
+import { getTeamColor, getTeamLogoUrl, getTeamLogoStyle } from "@/lib/utils/colors";
 import { cn } from "@/lib/utils/cn";
+
+function TeamIcon({ teamColour, teamName }: { teamColour: string; teamName: string }) {
+  const logoUrl = getTeamLogoUrl(teamName);
+  const color = getTeamColor(teamColour, teamName);
+  return (
+    <div
+      className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+      style={{ backgroundColor: color }}
+    >
+      {logoUrl && (
+        <img
+          src={logoUrl}
+          alt={teamName}
+          className="h-4 w-4 object-contain"
+          style={getTeamLogoStyle(teamName)}
+        />
+      )}
+    </div>
+  );
+}
 
 export default function StandingsPage() {
   const [year, setYear] = useState(new Date().getFullYear());
@@ -85,15 +105,7 @@ export default function StandingsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
-                      <div
-                        className="h-6 w-1 shrink-0 rounded-full"
-                        style={{
-                          backgroundColor: getTeamColor(
-                            driver.teamColour,
-                            driver.team
-                          ),
-                        }}
-                      />
+                      <TeamIcon teamColour={driver.teamColour} teamName={driver.team} />
                       <span className="font-bold">{driver.name}</span>
                       <span className="text-xs text-f1-text-muted">
                         {driver.acronym}
@@ -147,15 +159,7 @@ export default function StandingsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
-                      <div
-                        className="h-6 w-1 shrink-0 rounded-full"
-                        style={{
-                          backgroundColor: getTeamColor(
-                            ctor.teamColour,
-                            ctor.team
-                          ),
-                        }}
-                      />
+                      <TeamIcon teamColour={ctor.teamColour} teamName={ctor.team} />
                       <span className="font-bold">{ctor.team}</span>
                     </div>
                   </td>
