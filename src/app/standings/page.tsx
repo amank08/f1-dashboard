@@ -105,7 +105,26 @@ export default function StandingsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
-                      <TeamIcon teamColour={driver.teamColour} teamName={driver.team} />
+                      <div
+                        className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border-2"
+                        style={{
+                          borderColor: getTeamColor(driver.teamColour, driver.team),
+                          backgroundColor: "var(--f1-card)",
+                          boxShadow: `0 0 8px 1px ${getTeamColor(driver.teamColour, driver.team)}55`,
+                        }}
+                      >
+                        {driver.headshotUrl ? (
+                          <img
+                            src={driver.headshotUrl}
+                            alt={driver.name}
+                            className="h-full w-full object-cover object-top"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[10px] font-bold text-f1-text-muted">
+                            {driver.acronym}
+                          </div>
+                        )}
+                      </div>
                       <span className="font-bold">{driver.name}</span>
                       <span className="text-xs text-f1-text-muted">
                         {driver.acronym}

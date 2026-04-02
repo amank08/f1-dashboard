@@ -10,6 +10,7 @@ export interface DriverStanding {
   acronym: string;
   team: string;
   teamColour: string;
+  headshotUrl: string | null;
   points: number;
   wins: number;
   podiums: number;
@@ -132,6 +133,7 @@ export function useStandings(year: number) {
       acronym: d.name_acronym,
       team: d.team_name,
       teamColour: d.team_colour,
+      headshotUrl: d.headshot_url ?? null,
       points: s.points,
       wins: s.wins,
       podiums: s.podiums,

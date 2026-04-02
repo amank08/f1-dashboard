@@ -36,16 +36,17 @@ export function PodiumDisplay({ entries }: PodiumDisplayProps) {
           <div
             key={entry.driver.driver_number}
             className="flex flex-col items-center"
-            style={{ width: isP1 ? 140 : 120 }}
+            style={{ width: isP1 ? 148 : 124 }}
           >
             {/* Portrait */}
             <div
-              className="relative overflow-hidden rounded-lg border-2"
+              className="relative overflow-hidden rounded-xl border-2"
               style={{
                 borderColor: color,
-                width: isP1 ? 120 : 96,
-                height: isP1 ? 120 : 96,
+                width: isP1 ? 128 : 104,
+                height: isP1 ? 168 : 136,
                 backgroundColor: "var(--f1-card)",
+                boxShadow: `0 0 18px 3px ${color}55, 0 4px 16px rgba(0,0,0,0.5)`,
               }}
             >
               {entry.driver.headshot_url ? (
@@ -54,7 +55,7 @@ export function PodiumDisplay({ entries }: PodiumDisplayProps) {
                   alt={entry.driver.full_name}
                   fill
                   className="object-cover object-top"
-                  sizes={isP1 ? "120px" : "96px"}
+                  sizes={isP1 ? "128px" : "104px"}
                   unoptimized
                 />
               ) : (
@@ -62,6 +63,13 @@ export function PodiumDisplay({ entries }: PodiumDisplayProps) {
                   {entry.driver.name_acronym}
                 </div>
               )}
+              {/* Bottom gradient overlay */}
+              <div
+                className="absolute bottom-0 left-0 right-0 h-12"
+                style={{
+                  background: `linear-gradient(to top, ${color}99 0%, transparent 100%)`,
+                }}
+              />
             </div>
 
             {/* Podium block */}
