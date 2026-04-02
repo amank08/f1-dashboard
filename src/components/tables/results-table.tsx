@@ -3,6 +3,7 @@
 import type { Driver, LapData, Position, Interval, Stint, RaceControlMessage } from "@/lib/openf1/types";
 import { formatLapTime } from "@/lib/utils/formatters";
 import { getTeamColor, TIRE_COLORS, getTeamLogoUrl, getTeamLogoStyle } from "@/lib/utils/colors";
+import { KNOWN_DNS_OVERRIDES } from "@/lib/utils/constants";
 import { cn } from "@/lib/utils/cn";
 
 interface ResultRow {
@@ -37,7 +38,8 @@ export function buildResults(
   intervals?: Interval[],
   stints?: Stint[],
   sessionType?: string,
-  raceControl?: RaceControlMessage[]
+  raceControl?: RaceControlMessage[],
+  sessionKey?: number
 ): ResultRow[] {
   // Get final position for each driver
   const finalPositions = new Map<number, number>();
@@ -206,6 +208,15 @@ export function buildResults(
     ];
     if (segs.length > 0 && segs.every((s) => s > 0 && s !== 2064)) {
       hasRacingData.add(lap.driver_number);
+    }
+  }
+
+  // Apply known DNS overrides — remove drivers that OpenF1 misclassifies as
+  // starters (e.g. creates a lap_start:1 stint) but officially did not start.
+  if (sessionKey) {
+    const dnsOverrides = KNOWN_DNS_OVERRIDES[sessionKey];
+    if (dnsOverrides) {
+      for (const dn of dnsOverrides) hasRacingData.delete(dn);
     }
   }
 

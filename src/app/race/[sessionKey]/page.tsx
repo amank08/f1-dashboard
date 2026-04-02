@@ -39,7 +39,7 @@ export default function RaceResultsPage({
 
   const results =
     positions && drivers && laps
-      ? buildResults(positions, drivers, laps, undefined, undefined, session?.session_type)
+      ? buildResults(positions, drivers, laps, undefined, undefined, session?.session_type, undefined, Number(sessionKey))
       : [];
 
   // Calculate stats

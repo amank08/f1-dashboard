@@ -208,7 +208,7 @@ export default function SessionAnalysisPage() {
   const resultRows = useMemo(() => {
     if (!drivers || !positions || !validLaps) return [];
     const sessionType = sessions?.find((s) => s.session_key === sessionKey)?.session_type;
-    return buildResults(positions, drivers, validLaps, intervals ?? undefined, stints ?? undefined, sessionType, raceControl ?? undefined);
+    return buildResults(positions, drivers, validLaps, intervals ?? undefined, stints ?? undefined, sessionType, raceControl ?? undefined, sessionKey ?? undefined);
   }, [positions, drivers, validLaps, intervals, stints, sessions, sessionKey, raceControl]);
 
   // Race summary stats

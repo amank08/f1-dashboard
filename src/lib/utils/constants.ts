@@ -1,3 +1,10 @@
+// Drivers known to be DNS despite OpenF1 showing stint data for them.
+// OpenF1 sometimes creates a lap_start:1 stint for DNS drivers, causing
+// the dashboard to misclassify them as DNF. Keyed by session_key.
+export const KNOWN_DNS_OVERRIDES: Record<number, Set<number>> = {
+  11245: new Set([1, 23]), // 2026 Chinese GP — Norris (1) and Albon (23) DNS
+};
+
 // Meetings cancelled or excluded from the season calendar
 export const CANCELLED_MEETING_KEYS = new Set<number>([
   1257, // 2025 Bahrain Grand Prix — cancelled due to Middle East unrest
