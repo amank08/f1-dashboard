@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { getTeamColor, POSITION_COLORS } from "@/lib/utils/colors";
+import { headshotHiRes } from "@/lib/utils/formatters";
 import type { Driver } from "@/lib/openf1/types";
 
 interface PodiumEntry {
@@ -49,9 +50,9 @@ export function PodiumDisplay({ entries }: PodiumDisplayProps) {
                 boxShadow: `0 0 18px 3px ${color}55, 0 4px 16px rgba(0,0,0,0.5)`,
               }}
             >
-              {entry.driver.headshot_url ? (
+              {headshotHiRes(entry.driver.headshot_url) ? (
                 <Image
-                  src={entry.driver.headshot_url}
+                  src={headshotHiRes(entry.driver.headshot_url)!}
                   alt={entry.driver.full_name}
                   fill
                   className="object-cover object-top"

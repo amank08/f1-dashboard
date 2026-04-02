@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useStandings } from "@/lib/hooks/use-standings";
 import { getTeamColor, getTeamLogoUrl, getTeamLogoStyle } from "@/lib/utils/colors";
+import { headshotHiRes } from "@/lib/utils/formatters";
 import { cn } from "@/lib/utils/cn";
 
 function TeamIcon({ teamColour, teamName }: { teamColour: string; teamName: string }) {
@@ -113,9 +114,9 @@ export default function StandingsPage() {
                           boxShadow: `0 0 8px 1px ${getTeamColor(driver.teamColour, driver.team)}55`,
                         }}
                       >
-                        {driver.headshotUrl ? (
+                        {headshotHiRes(driver.headshotUrl) ? (
                           <img
-                            src={driver.headshotUrl}
+                            src={headshotHiRes(driver.headshotUrl)!}
                             alt={driver.name}
                             className="h-full w-full object-cover object-top"
                           />

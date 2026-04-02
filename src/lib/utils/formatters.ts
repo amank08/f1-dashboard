@@ -40,6 +40,12 @@ const ALPHA3_TO_ALPHA2: Record<string, string> = {
   RSA: "ZA", ARE: "AE", SAU: "SA", MCO: "MC",
 };
 
+/** Upgrade an OpenF1 headshot URL to a higher-resolution transform. */
+export function headshotHiRes(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return url.replace(/\.transform\/\w+\/image\.png$/, ".transform/4col/image.png");
+}
+
 /** Get a flag image URL for an OpenF1 country_code. */
 export function countryFlagUrl(countryCode: string): string {
   const alpha2 = (ALPHA3_TO_ALPHA2[countryCode] ?? countryCode.slice(0, 2)).toLowerCase();
