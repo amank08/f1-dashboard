@@ -36,7 +36,7 @@ export function CircuitMap({ circuitShortName }: CircuitMapProps) {
           x2={circuit.sfLine.x2}
           y2={circuit.sfLine.y2}
           stroke="white"
-          strokeWidth="2"
+          strokeWidth="1"
           strokeLinecap="butt"
         />
         {/* Intermediate tick marks at sector boundaries */}
