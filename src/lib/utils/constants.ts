@@ -1,8 +1,9 @@
-// Drivers known to be DNS despite OpenF1 showing stint data for them.
-// OpenF1 sometimes creates a lap_start:1 stint for DNS drivers, causing
-// the dashboard to misclassify them as DNF. Keyed by session_key.
-export const KNOWN_DNS_OVERRIDES: Record<number, Set<number>> = {
-  11245: new Set([1, 23]), // 2026 Chinese GP — Norris (1) and Albon (23) DNS
+// Drivers who started the race but have zero OpenF1 lap entries (crashed
+// before any timing data was recorded). Without this, they'd be misclassified
+// as DNS because stint-only data defaults to DNS. Keyed by session_key.
+// Only add entries here when confirmed: driver started but OpenF1 has no laps.
+export const KNOWN_EARLY_STARTERS: Record<number, Set<number>> = {
+  // Example (uncomment if confirmed): 9999: new Set([16]), // session — driver crashed T1 lap 1
 };
 
 // Meetings cancelled or excluded from the season calendar

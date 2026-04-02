@@ -3,7 +3,7 @@
 import type { Driver, LapData, Position, Interval, Stint, RaceControlMessage } from "@/lib/openf1/types";
 import { formatLapTime } from "@/lib/utils/formatters";
 import { getTeamColor, TIRE_COLORS, getTeamLogoUrl, getTeamLogoStyle } from "@/lib/utils/colors";
-import { KNOWN_DNS_OVERRIDES } from "@/lib/utils/constants";
+import { KNOWN_EARLY_STARTERS } from "@/lib/utils/constants";
 import { cn } from "@/lib/utils/cn";
 
 interface ResultRow {
@@ -184,11 +184,13 @@ export function buildResults(
   // Drivers WITH lap entries but no timing data are handled by the segments check
   // below (avoids false positives for grid stalls like Hulkenberg AUS 2026).
   if (stints) {
-    const driversWithLaps = new Set(laps.map((l) => l.driver_number));
     for (const s of stints) {
+      // Only mark as started if the driver has at least one counted lap.
+      // Drivers with stint-only and NO lap data default to DNS — OpenF1 sometimes
+      // creates erroneous lap_start:1 stints for DNS drivers (e.g. CHN 2026).
+      // Genuine early-crash starters with no lap data are handled via
+      // KNOWN_EARLY_STARTERS below.
       if (maxLaps.has(s.driver_number)) {
-        hasRacingData.add(s.driver_number);
-      } else if (s.lap_start != null && !driversWithLaps.has(s.driver_number)) {
         hasRacingData.add(s.driver_number);
       }
     }
@@ -211,12 +213,12 @@ export function buildResults(
     }
   }
 
-  // Apply known DNS overrides — remove drivers that OpenF1 misclassifies as
-  // starters (e.g. creates a lap_start:1 stint) but officially did not start.
+  // Apply known early-starter overrides — drivers who genuinely started but
+  // have zero lap entries in OpenF1 (crashed before any timing was recorded).
   if (sessionKey) {
-    const dnsOverrides = KNOWN_DNS_OVERRIDES[sessionKey];
-    if (dnsOverrides) {
-      for (const dn of dnsOverrides) hasRacingData.delete(dn);
+    const starters = KNOWN_EARLY_STARTERS[sessionKey];
+    if (starters) {
+      for (const dn of starters) hasRacingData.add(dn);
     }
   }
 
