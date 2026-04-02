@@ -29,28 +29,16 @@ export function CircuitMap({ circuitShortName }: CircuitMapProps) {
             strokeOpacity={0.85}
           />
         ))}
-        {/* Checkered start/finish line */}
-        {(() => {
-          const { x1, y1, x2, y2 } = circuit.sfLine;
-          const dx = x2 - x1;
-          const dy = y2 - y1;
-          const length = Math.sqrt(dx * dx + dy * dy);
-          const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-          const cx = (x1 + x2) / 2;
-          const cy = (y1 + y2) / 2;
-          const h = 3;
-          return (
-            <image
-              href="/checkered_flag.jpg"
-              x={cx - length / 2}
-              y={cy - h / 2}
-              width={length}
-              height={h}
-              transform={`rotate(${angle}, ${cx}, ${cy})`}
-              preserveAspectRatio="none"
-            />
-          );
-        })()}
+        {/* Start/finish line */}
+        <line
+          x1={circuit.sfLine.x1}
+          y1={circuit.sfLine.y1}
+          x2={circuit.sfLine.x2}
+          y2={circuit.sfLine.y2}
+          stroke="white"
+          strokeWidth="2"
+          strokeLinecap="butt"
+        />
         {/* Intermediate tick marks at sector boundaries */}
         {([
           { line: circuit.markers.i1, color: SECTOR_COLORS[0] },
