@@ -1,3 +1,9 @@
+// Meetings cancelled or excluded from the season calendar
+export const CANCELLED_MEETING_KEYS = new Set<number>([
+  1257, // 2025 Bahrain Grand Prix — cancelled due to Middle East unrest
+  1258, // 2025 Saudi Arabian Grand Prix — cancelled due to Middle East unrest
+]);
+
 // F1 Points system (2023+)
 export const RACE_POINTS: Record<number, number> = {
   1: 25,

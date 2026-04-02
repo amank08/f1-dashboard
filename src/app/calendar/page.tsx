@@ -34,9 +34,7 @@ export default function CalendarPage() {
     sessionsByMeeting.set(s.meeting_key, list);
   }
 
-  const raceMeetings = meetings?.filter(
-    (m) => !m.meeting_name.toLowerCase().includes("testing")
-  );
+  const raceMeetings = meetings;
   const completedCount = raceMeetings?.filter((m) => isPast(parseISO(m.date_end))).length ?? 0;
   const totalCount = raceMeetings?.length ?? 0;
 
