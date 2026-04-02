@@ -50,9 +50,9 @@ export function PodiumDisplay({ entries }: PodiumDisplayProps) {
                 boxShadow: `0 0 18px 3px ${color}55, 0 4px 16px rgba(0,0,0,0.5)`,
               }}
             >
-              {headshotHiRes(entry.driver.headshot_url) ? (
+              {headshotHiRes(entry.driver.headshot_url, entry.driver.team_name) ? (
                 <Image
-                  src={headshotHiRes(entry.driver.headshot_url)!}
+                  src={headshotHiRes(entry.driver.headshot_url, entry.driver.team_name)!}
                   alt={entry.driver.full_name}
                   fill
                   className="object-cover object-top"

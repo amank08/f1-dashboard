@@ -40,20 +40,48 @@ const ALPHA3_TO_ALPHA2: Record<string, string> = {
   RSA: "ZA", ARE: "AE", SAU: "SA", MCO: "MC",
 };
 
-/** Upgrade an OpenF1 headshot URL to a high-quality Cloudinary render.
- *  Converts the fallback-prefixed transform URL to the proper Cloudinary
- *  image/upload path with auto format (WebP/AVIF), auto quality, and 640px width.
+// Maps OpenF1 team_name → F1 CDN team slug used in 2026 portrait paths
+const TEAM_CDN_SLUG: Record<string, string> = {
+  "McLaren": "mclaren",
+  "Red Bull Racing": "redbullracing",
+  "Ferrari": "ferrari",
+  "Mercedes": "mercedes",
+  "Aston Martin": "astonmartin",
+  "Williams": "williams",
+  "Alpine": "alpine",
+  "Haas F1 Team": "haasf1team",
+  "Audi": "audi",
+  "Racing Bulls": "racingbulls",
+  "Cadillac": "cadillac",
+};
+
+/** Returns a high-quality 2026 season driver portrait URL.
+ *  When teamName is provided, uses the official 2026 CDN path.
+ *  Falls back to the Cloudinary-upscaled legacy path if team is unknown.
  */
-export function headshotHiRes(url: string | null | undefined): string | null {
+export function headshotHiRes(
+  url: string | null | undefined,
+  teamName?: string | null
+): string | null {
   if (!url) return null;
-  // Strip the fallback prefix and the trailing .transform/Xcol/image.png
-  const match = url.match(
+
+  // Extract driverCode from the OpenF1 URL (e.g. "lannor01")
+  const codeMatch = url.match(/\/([a-z0-9]+)\.png\.transform/);
+  const teamSlug = teamName ? TEAM_CDN_SLUG[teamName] : null;
+
+  if (codeMatch && teamSlug) {
+    const code = codeMatch[1];
+    return `https://media.formula1.com/image/upload/f_auto,c_limit,q_auto,w_640/v1740000001/common/f1/2026/${teamSlug}/${code}/2026${teamSlug}${code}right.webp`;
+  }
+
+  // Fallback: strip the d_driver_fallback prefix and use Cloudinary at w_640
+  const legacyMatch = url.match(
     /https:\/\/media\.formula1\.com\/d_driver_fallback_image\.png\/(content\/dam\/.+?)\.png\.transform\/.+$/
   );
-  if (match) {
-    return `https://media.formula1.com/image/upload/f_auto,c_limit,q_auto,w_640/${match[1]}.png`;
+  if (legacyMatch) {
+    return `https://media.formula1.com/image/upload/f_auto,c_limit,q_auto,w_640/${legacyMatch[1]}.png`;
   }
-  // Fallback: just bump to 4col for any other URL pattern
+
   return url.replace(/\.transform\/\w+\/image\.png$/, ".transform/4col/image.png");
 }
 

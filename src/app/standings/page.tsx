@@ -114,9 +114,9 @@ export default function StandingsPage() {
                           boxShadow: `0 0 8px 1px ${getTeamColor(driver.teamColour, driver.team)}55`,
                         }}
                       >
-                        {headshotHiRes(driver.headshotUrl) ? (
+                        {headshotHiRes(driver.headshotUrl, driver.team) ? (
                           <img
-                            src={headshotHiRes(driver.headshotUrl)!}
+                            src={headshotHiRes(driver.headshotUrl, driver.team)!}
                             alt={driver.name}
                             className="h-full w-full object-cover object-top"
                           />
