@@ -30,23 +30,27 @@ export function CircuitMap({ circuitShortName }: CircuitMapProps) {
           />
         ))}
         {/* Checkered start/finish line */}
-        <defs>
-          <pattern id="checker" width="1" height="1" patternUnits="userSpaceOnUse">
-            <rect width="0.5" height="0.5" fill="white" />
-            <rect x="0.5" y="0.5" width="0.5" height="0.5" fill="white" />
-            <rect x="0.5" width="0.5" height="0.5" fill="#222" />
-            <rect y="0.5" width="0.5" height="0.5" fill="#222" />
-          </pattern>
-        </defs>
-        <line
-          x1={circuit.sfLine.x1}
-          y1={circuit.sfLine.y1}
-          x2={circuit.sfLine.x2}
-          y2={circuit.sfLine.y2}
-          stroke="url(#checker)"
-          strokeWidth="2"
-          strokeLinecap="butt"
-        />
+        {(() => {
+          const { x1, y1, x2, y2 } = circuit.sfLine;
+          const dx = x2 - x1;
+          const dy = y2 - y1;
+          const length = Math.sqrt(dx * dx + dy * dy);
+          const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+          const cx = (x1 + x2) / 2;
+          const cy = (y1 + y2) / 2;
+          const h = 3;
+          return (
+            <image
+              href="/checkered_flag.jpg"
+              x={cx - length / 2}
+              y={cy - h / 2}
+              width={length}
+              height={h}
+              transform={`rotate(${angle}, ${cx}, ${cy})`}
+              preserveAspectRatio="none"
+            />
+          );
+        })()}
         {/* Intermediate tick marks at sector boundaries */}
         {([
           { line: circuit.markers.i1, color: SECTOR_COLORS[0] },
