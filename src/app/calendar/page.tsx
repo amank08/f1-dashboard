@@ -132,7 +132,7 @@ export default function CalendarPage() {
 
                     {isPastRace && raceSessionKey ? (
                       <Link
-                        href={`/race/${raceSessionKey}`}
+                        href={`/live?session=${raceSessionKey}`}
                         className="flex items-center gap-1 text-sm font-semibold text-f1-red transition-colors hover:text-f1-red/80"
                       >
                         Results <ArrowRight size={13} />

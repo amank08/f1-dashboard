@@ -60,7 +60,7 @@ export default function RaceResultsPage({
   return (
     <div className="space-y-6">
       <Link
-        href="/live"
+        href={`/live?session=${sessionKey}`}
         className="inline-flex items-center gap-2 text-sm text-f1-text-secondary hover:text-f1-text transition-colors"
       >
         <ArrowLeft size={16} />

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { isPast, isFuture, parseISO } from "date-fns";
 import { useMeetings } from "@/lib/hooks/use-meetings";
-import { useSessions } from "@/lib/hooks/use-sessions";
+import { useSessions, useSession } from "@/lib/hooks/use-sessions";
 import { usePositions } from "@/lib/hooks/use-positions";
 import { useIntervals } from "@/lib/hooks/use-intervals";
 import { useStints } from "@/lib/hooks/use-stints";
@@ -57,10 +58,17 @@ function findLatestCompletedSession(sessions: Session[]): Session | undefined {
 }
 
 export default function SessionAnalysisPage() {
+  const searchParams = useSearchParams();
+  const paramSessionKey = useMemo(() => {
+    const s = searchParams.get("session");
+    return s ? Number(s) : null;
+  }, [searchParams]);
+
   const [year, setYear] = useState(new Date().getFullYear());
   const [meetingKey, setMeetingKey] = useState<number | null>(null);
   const [sessionKey, setSessionKey] = useState<number | null>(null);
-  const [autoSelected, setAutoSelected] = useState(false);
+  // If URL has ?session=, skip default auto-selection
+  const [autoSelected, setAutoSelected] = useState(!!paramSessionKey);
   const [viewMode, setViewMode] = useState<"results" | "replay">("results");
   const [replayTime, setReplayTime] = useState<number | null>(null);
 
@@ -70,6 +78,16 @@ export default function SessionAnalysisPage() {
 
   const { data: meetings, isLoading: meetingsLoading, error: meetingsError } = useMeetings(year);
   const { data: sessions, isLoading: sessionsLoading } = useSessions(meetingKey);
+
+  // Resolve ?session= URL param → pre-select the correct year, meeting, and session
+  const { data: paramSessionData } = useSession(paramSessionKey);
+  useEffect(() => {
+    if (!paramSessionKey || !paramSessionData?.[0]) return;
+    const s = paramSessionData[0];
+    setYear(new Date(s.date_start).getFullYear());
+    setMeetingKey(s.meeting_key);
+    setSessionKey(s.session_key);
+  }, [paramSessionKey, paramSessionData]);
 
   // Detect OpenF1 live-session lockout
   const apiRestricted = meetingsError?.message?.includes("Live F1 session")
