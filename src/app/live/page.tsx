@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { isPast, isFuture, parseISO } from "date-fns";
 import { useMeetings } from "@/lib/hooks/use-meetings";
@@ -57,18 +57,24 @@ function findLatestCompletedSession(sessions: Session[]): Session | undefined {
     )[0];
 }
 
-export default function SessionAnalysisPage() {
+/** Reads ?session= from the URL and calls onParam. Must be wrapped in Suspense. */
+function SessionParamReader({ onParam }: { onParam: (key: number | null) => void }) {
   const searchParams = useSearchParams();
-  const paramSessionKey = useMemo(() => {
+  useEffect(() => {
     const s = searchParams.get("session");
-    return s ? Number(s) : null;
-  }, [searchParams]);
+    onParam(s ? Number(s) : null);
+  }, [searchParams, onParam]);
+  return null;
+}
+
+export default function SessionAnalysisPage() {
+  const [paramSessionKey, setParamSessionKey] = useState<number | null>(null);
 
   const [year, setYear] = useState(new Date().getFullYear());
   const [meetingKey, setMeetingKey] = useState<number | null>(null);
   const [sessionKey, setSessionKey] = useState<number | null>(null);
   // If URL has ?session=, skip default auto-selection
-  const [autoSelected, setAutoSelected] = useState(!!paramSessionKey);
+  const [autoSelected, setAutoSelected] = useState(false);
   const [viewMode, setViewMode] = useState<"results" | "replay">("results");
   const [replayTime, setReplayTime] = useState<number | null>(null);
 
@@ -84,6 +90,7 @@ export default function SessionAnalysisPage() {
   useEffect(() => {
     if (!paramSessionKey || !paramSessionData?.[0]) return;
     const s = paramSessionData[0];
+    setAutoSelected(true); // prevent default auto-select from overriding
     setYear(new Date(s.date_start).getFullYear());
     setMeetingKey(s.meeting_key);
     setSessionKey(s.session_key);
@@ -493,6 +500,9 @@ export default function SessionAnalysisPage() {
 
   return (
     <div className="space-y-6">
+      <Suspense fallback={null}>
+        <SessionParamReader onParam={setParamSessionKey} />
+      </Suspense>
       <PageHeader
         title="Session Overview"
         subtitle={
