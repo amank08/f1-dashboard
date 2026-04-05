@@ -10,6 +10,8 @@ export const KNOWN_EARLY_STARTERS: Record<number, Set<number>> = {
 export const CANCELLED_MEETING_KEYS = new Set<number>([
   1257, // 2025 Bahrain Grand Prix — cancelled due to Middle East unrest
   1258, // 2025 Saudi Arabian Grand Prix — cancelled due to Middle East unrest
+  1282, // 2026 Bahrain Grand Prix — cancelled
+  1283, // 2026 Saudi Arabian Grand Prix — cancelled
 ]);
 
 // F1 Points system (2023+)
