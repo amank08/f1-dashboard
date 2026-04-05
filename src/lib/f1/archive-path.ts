@@ -54,12 +54,12 @@ export function buildPositionArchiveUrl(
 ): string {
   const year = session.year;
 
-  // Meeting folder date = date of the Race session (or, as a fallback,
-  // the last session of the weekend).
+  // Meeting folder date = date of the Grand Prix race session. Match on
+  // session_name strictly: on sprint weekends the Sprint also has
+  // session_type === "Race", which would otherwise shadow the real race.
+  // Fall back to the latest session if (somehow) no "Race" session exists.
   const race =
-    meetingSessions.find(
-      (s) => s.session_name === "Race" || s.session_type === "Race"
-    ) ??
+    meetingSessions.find((s) => s.session_name === "Race") ??
     [...meetingSessions].sort(
       (a, b) =>
         new Date(b.date_start).getTime() - new Date(a.date_start).getTime()
