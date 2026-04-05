@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { buildPositionArchiveUrl } from "@/lib/f1/archive-path";
 import { fetchPositionArchive } from "@/lib/f1/position-archive";
 import { diskCacheGet, diskCacheSet } from "@/lib/openf1/disk-cache";
+import { rateLimiter } from "@/lib/openf1/rate-limiter";
 import type { Meeting, Session, LocationSample } from "@/lib/openf1/types";
 
 // Next.js runtime: Node only (needs zlib).
@@ -11,12 +12,26 @@ export const maxDuration = 60;
 
 const OPENF1 = "https://api.openf1.org/v1";
 
-async function openf1<T>(path: string): Promise<T> {
-  const res = await fetch(`${OPENF1}/${path}`);
+/**
+ * Fetch an OpenF1 endpoint, sharing the same disk cache key format the
+ * main /api/f1 proxy uses so hits from either route reuse each other's
+ * cached data. Rate-limits on cold fetches.
+ */
+async function openf1<T>(path: string, query: string): Promise<T> {
+  const cacheKey = `${path}?${query}`;
+  const cached = diskCacheGet(cacheKey);
+  if (cached) return cached as T;
+
+  await rateLimiter.acquire();
+  const res = await fetch(`${OPENF1}/${path}?${query}`);
   if (!res.ok) {
-    throw new Error(`OpenF1 ${path} failed: ${res.status}`);
+    throw new Error(
+      `OpenF1 ${path}?${query} failed: ${res.status}`
+    );
   }
-  return (await res.json()) as T;
+  const data = (await res.json()) as T;
+  diskCacheSet(cacheKey, data);
+  return data;
 }
 
 export async function GET(request: NextRequest) {
@@ -37,18 +52,20 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Resolve session → meeting → sibling sessions in parallel.
-    const [sessions] = await Promise.all([
-      openf1<Session[]>(`sessions?session_key=${sessionKey}`),
-    ]);
+    // Resolve session → meeting → sibling sessions. These calls share the
+    // on-disk cache with the main /api/f1 proxy, so they're usually hits.
+    const sessions = await openf1<Session[]>(
+      "sessions",
+      `session_key=${sessionKey}`
+    );
     const session = sessions[0];
     if (!session) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
     const [meetings, meetingSessions] = await Promise.all([
-      openf1<Meeting[]>(`meetings?meeting_key=${session.meeting_key}`),
-      openf1<Session[]>(`sessions?meeting_key=${session.meeting_key}`),
+      openf1<Meeting[]>("meetings", `meeting_key=${session.meeting_key}`),
+      openf1<Session[]>("sessions", `meeting_key=${session.meeting_key}`),
     ]);
     const meeting = meetings[0];
     if (!meeting) {
