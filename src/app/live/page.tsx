@@ -90,10 +90,15 @@ export default function SessionAnalysisPage() {
   useEffect(() => {
     if (!paramSessionKey || !paramSessionData?.[0]) return;
     const s = paramSessionData[0];
+    // Legitimate one-shot sync of fetched URL-param data into three
+    // interdependent state values; restructuring as derived-state would
+    // tangle all downstream hooks that depend on year/meetingKey/sessionKey.
+    /* eslint-disable react-hooks/set-state-in-effect */
     setAutoSelected(true); // prevent default auto-select from overriding
     setYear(new Date(s.date_start).getFullYear());
     setMeetingKey(s.meeting_key);
     setSessionKey(s.session_key);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [paramSessionKey, paramSessionData]);
 
   // Detect OpenF1 live-session lockout
