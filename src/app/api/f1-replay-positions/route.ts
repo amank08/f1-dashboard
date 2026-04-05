@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildPositionArchiveUrl } from "@/lib/f1/archive-path";
 import { fetchPositionArchive } from "@/lib/f1/position-archive";
-import { buildReplaySnapshot } from "@/lib/f1/replay-snapshot";
+import {
+  buildReplaySnapshot,
+  type CircuitGeometry,
+} from "@/lib/f1/replay-snapshot";
 import { diskCacheGet, diskCacheSet } from "@/lib/openf1/disk-cache";
 import { rateLimiter } from "@/lib/openf1/rate-limiter";
 import type {
-  LapData,
   Meeting,
   Session,
   LocationSample,
@@ -41,6 +43,42 @@ async function openf1<T>(path: string, query: string): Promise<T> {
   return data;
 }
 
+/**
+ * Fetch MultiViewer circuit geometry (cached on disk — circuit shapes
+ * are immutable per year). Returns `undefined` if MV doesn't have it,
+ * so the replay falls back to a track-less map.
+ */
+async function fetchCircuitGeometry(
+  circuitKey: number,
+  year: number
+): Promise<CircuitGeometry | undefined> {
+  const cacheKey = `mvcircuit_${circuitKey}_${year}`;
+  const cached = diskCacheGet(cacheKey) as CircuitGeometry | undefined;
+  if (cached) return cached;
+
+  try {
+    const res = await fetch(
+      `https://api.multiviewer.app/api/v1/circuits/${circuitKey}/${year}`
+    );
+    if (!res.ok) return undefined;
+    const data = (await res.json()) as {
+      x: number[];
+      y: number[];
+      rotation: number;
+    };
+    if (!Array.isArray(data.x) || !Array.isArray(data.y)) return undefined;
+    const geom: CircuitGeometry = {
+      x: data.x,
+      y: data.y,
+      rotation: data.rotation ?? 0,
+    };
+    diskCacheSet(cacheKey, geom);
+    return geom;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const sessionKeyParam = request.nextUrl.searchParams.get("session_key");
   const sessionKey = sessionKeyParam ? Number(sessionKeyParam) : NaN;
@@ -55,7 +93,9 @@ export async function GET(request: NextRequest) {
   // Key is versioned ("snap") — the old `f1replaypos_session=` entries
   // held raw LocationSample[] which are now too large to ship to the
   // browser; ignore them and build the compact snapshot fresh.
-  const cacheKey = `f1replaysnap_session=${sessionKey}`;
+  // "mv" suffix replaces the previous outline-from-telemetry snapshot
+  // (keyed as `snap`) with MultiViewer-sourced circuit geometry.
+  const cacheKey = `f1replaysnapmv_session=${sessionKey}`;
   const cached = diskCacheGet(cacheKey) as ReplaySnapshot | undefined;
   if (cached) {
     return NextResponse.json(cached, { headers: { "X-Cache": "DISK" } });
@@ -93,15 +133,16 @@ export async function GET(request: NextRequest) {
       session.meeting_key
     );
 
-    // Laps are optional — used only for a cleaner track outline. We read
-    // them from the shared disk cache if available (usually cached from
-    // the results view) but never make a live OpenF1 call here, since
-    // this route runs on cold replay loads and must not amplify 429s.
-    const cachedLaps = diskCacheGet(
-      `laps?session_key=${sessionKey}`
-    ) as LapData[] | undefined;
+    // Authoritative circuit outline from MultiViewer. We cache it under a
+    // synthetic key so repeat requests (and other sessions at the same
+    // circuit/year) hit disk. Failure is non-fatal — without it the map
+    // still renders driver dots, just without the outline.
+    const circuit = await fetchCircuitGeometry(
+      session.circuit_key,
+      meeting.year
+    );
 
-    const snapshot = buildReplaySnapshot(samples, cachedLaps);
+    const snapshot = buildReplaySnapshot(samples, circuit);
     diskCacheSet(cacheKey, snapshot);
 
     return NextResponse.json(snapshot, {

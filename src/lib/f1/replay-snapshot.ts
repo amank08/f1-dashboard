@@ -6,9 +6,15 @@
  * page load. We do all of that server-side once, cache the result, and ship
  * ~2 MB of parallel arrays the browser can feed straight into
  * `getFrameAtTime`.
+ *
+ * Track outline comes from MultiViewer's authoritative circuit geometry
+ * when available — tracing the outline from telemetry is unreliable (DNS
+ * drivers with stuck-at-pit samples, formation-lap jitter, missing laps
+ * metadata). MV's x/y share F1's native coordinate system with the
+ * telemetry feed, so we rotate both with the same angle and normalize to
+ * a shared viewBox to keep driver dots aligned with the drawn track.
  */
 import type {
-  LapData,
   LocationSample,
   ReplayDriverTrack,
   ReplaySnapshot,
@@ -17,15 +23,27 @@ import type {
 /** Target sample spacing after downsample (ms). ~2 Hz. */
 const DOWNSAMPLE_MS = 450;
 
+export interface CircuitGeometry {
+  /** MultiViewer circuit x samples in F1 native coords. */
+  x: number[];
+  /** MultiViewer circuit y samples in F1 native coords. */
+  y: number[];
+  /** MV rotation in degrees. Applied as `(rotation - 180)` around the origin. */
+  rotation: number;
+}
+
 /**
- * Pre-process raw `LocationSample[]` into a `ReplaySnapshot`. `laps` is
- * optional: if provided, the reference lap window (lap 2–3) is used to
- * trace the track outline; otherwise we fall back to the first ~120 s of
- * the reference driver's data.
+ * Pre-process raw `LocationSample[]` into a `ReplaySnapshot`.
+ *
+ * When `circuit` is provided (MultiViewer geometry), the track outline is
+ * drawn from its authoritative points and both the outline and telemetry
+ * samples share the same rotation + viewBox normalization. Without it we
+ * fall back to normalizing from the telemetry bounding box and leaving
+ * the outline empty (the map still renders driver dots).
  */
 export function buildReplaySnapshot(
   raw: LocationSample[],
-  laps?: LapData[]
+  circuit?: CircuitGeometry
 ): ReplaySnapshot {
   if (raw.length === 0) {
     return {
@@ -37,29 +55,61 @@ export function buildReplaySnapshot(
     };
   }
 
-  // Global coordinate bounds for normalization.
-  let rawMinX = Infinity;
-  let rawMaxX = -Infinity;
-  let rawMinY = Infinity;
-  let rawMaxY = -Infinity;
-  for (const s of raw) {
-    if (s.x < rawMinX) rawMinX = s.x;
-    if (s.x > rawMaxX) rawMaxX = s.x;
-    if (s.y < rawMinY) rawMinY = s.y;
-    if (s.y > rawMaxY) rawMaxY = s.y;
+  // Rotation: MultiViewer stores circuit rotation in degrees and F1's
+  // convention is `(rotation - 180)` around the origin with SVG y flipped.
+  // When no MV data is available we fall back to a straight y-flip (angle
+  // 0 after the -180 offset ⇒ negate y) so at least the telemetry renders
+  // right-side-up.
+  const angleDeg = circuit ? circuit.rotation - 180 : -180;
+  const angle = (angleDeg * Math.PI) / 180;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const rotate = (px: number, py: number) => ({
+    x: px * cos - py * sin,
+    y: -(px * sin + py * cos),
+  });
+
+  // Rotate circuit outline (if any) and collect bounds. Prefer computing
+  // bounds from the MV outline: it's a clean closed lap, whereas telemetry
+  // often includes pit-lane excursions that stretch the bbox.
+  let rotatedCircuit: { x: number; y: number }[] | null = null;
+  let boundsMinX = Infinity;
+  let boundsMaxX = -Infinity;
+  let boundsMinY = Infinity;
+  let boundsMaxY = -Infinity;
+
+  if (circuit && circuit.x.length > 0) {
+    rotatedCircuit = circuit.x.map((cx, i) => rotate(cx, circuit.y[i]));
+    for (const p of rotatedCircuit) {
+      if (p.x < boundsMinX) boundsMinX = p.x;
+      if (p.x > boundsMaxX) boundsMaxX = p.x;
+      if (p.y < boundsMinY) boundsMinY = p.y;
+      if (p.y > boundsMaxY) boundsMaxY = p.y;
+    }
+  } else {
+    // No MV data — bound from telemetry itself (rotated the same way).
+    for (const s of raw) {
+      const p = rotate(s.x, s.y);
+      if (p.x < boundsMinX) boundsMinX = p.x;
+      if (p.x > boundsMaxX) boundsMaxX = p.x;
+      if (p.y < boundsMinY) boundsMinY = p.y;
+      if (p.y > boundsMaxY) boundsMaxY = p.y;
+    }
   }
-  const rangeX = rawMaxX - rawMinX || 1;
-  const rangeY = rawMaxY - rawMinY || 1;
+
+  const rangeX = boundsMaxX - boundsMinX || 1;
+  const rangeY = boundsMaxY - boundsMinY || 1;
   const maxRange = Math.max(rangeX, rangeY);
   const padding = 0.05;
   const scale = ((1 - 2 * padding) * 100) / maxRange;
   const offsetX = padding * 100 + ((maxRange - rangeX) / 2) * scale;
   const offsetY = padding * 100 + ((maxRange - rangeY) / 2) * scale;
-  const nx = (x: number) => (x - rawMinX) * scale + offsetX;
-  // SVG y grows downward → flip so the track renders right-side-up.
-  const ny = (y: number) => 100 - ((y - rawMinY) * scale + offsetY);
+  const project = (px: number, py: number) => ({
+    x: (px - boundsMinX) * scale + offsetX,
+    y: (py - boundsMinY) * scale + offsetY,
+  });
 
-  // Group by driver.
+  // Group telemetry by driver.
   const grouped = new Map<number, LocationSample[]>();
   for (const s of raw) {
     let arr = grouped.get(s.driver_number);
@@ -73,14 +123,6 @@ export function buildReplaySnapshot(
   const drivers: Record<string, ReplayDriverTrack> = {};
   let globalMin = Infinity;
   let globalMax = -Infinity;
-  // Reference driver = one with the largest coordinate spread (i.e. who
-  // actually drove the most track). Choosing by sample count alone is
-  // dangerous: a DNS/garage driver whose telemetry is stuck at one spot
-  // can have more samples than anyone who raced (CHN 2026 had a driver
-  // with 14,949 stationary samples at (6.5, 95) — picking them as the
-  // reference collapsed the track outline to a dot).
-  let refNum = 0;
-  let refSpread = -Infinity;
 
   for (const [num, samples] of grouped) {
     samples.sort(
@@ -90,24 +132,16 @@ export function buildReplaySnapshot(
     const x: number[] = [];
     const y: number[] = [];
     let lastKept = -Infinity;
-    let dMinX = Infinity;
-    let dMaxX = -Infinity;
-    let dMinY = Infinity;
-    let dMaxY = -Infinity;
     for (const s of samples) {
       const ts = new Date(s.date).getTime();
       if (ts - lastKept >= DOWNSAMPLE_MS) {
+        const r = rotate(s.x, s.y);
+        const p = project(r.x, r.y);
         t.push(ts);
-        // Round to 2 decimals to shrink JSON further (1 cm precision on a
-        // 100-unit viewBox — well beyond what pixels can show).
-        const vx = Math.round(nx(s.x) * 100) / 100;
-        const vy = Math.round(ny(s.y) * 100) / 100;
-        x.push(vx);
-        y.push(vy);
-        if (vx < dMinX) dMinX = vx;
-        if (vx > dMaxX) dMaxX = vx;
-        if (vy < dMinY) dMinY = vy;
-        if (vy > dMaxY) dMaxY = vy;
+        // Round to 2 decimals — 1 cm precision on a 100-unit viewBox is
+        // well beyond sub-pixel.
+        x.push(Math.round(p.x * 100) / 100);
+        y.push(Math.round(p.y * 100) / 100);
         lastKept = ts;
       }
     }
@@ -115,14 +149,20 @@ export function buildReplaySnapshot(
     drivers[String(num)] = { t, x, y };
     if (t[0] < globalMin) globalMin = t[0];
     if (t[t.length - 1] > globalMax) globalMax = t[t.length - 1];
-    const spread = Math.max(dMaxX - dMinX, dMaxY - dMinY);
-    if (spread > refSpread) {
-      refSpread = spread;
-      refNum = num;
-    }
   }
 
-  const trackPath = buildTrackPath(drivers[String(refNum)], laps, refNum);
+  // Build the outline path from the (rotated, projected) MV circuit.
+  let trackPath = "";
+  if (rotatedCircuit && rotatedCircuit.length > 1) {
+    const parts: string[] = [];
+    for (let i = 0; i < rotatedCircuit.length; i++) {
+      const p = project(rotatedCircuit[i].x, rotatedCircuit[i].y);
+      const cmd = i === 0 ? "M" : "L";
+      parts.push(`${cmd} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`);
+    }
+    parts.push("Z");
+    trackPath = parts.join(" ");
+  }
 
   return {
     minTime: globalMin === Infinity ? 0 : globalMin,
@@ -131,82 +171,4 @@ export function buildReplaySnapshot(
     viewBox: "0 0 100 100",
     drivers,
   };
-}
-
-/**
- * Trace a clean lap outline from the reference driver. Uses lap 2→4 (or
- * lap 3's duration) if available to skip formation-lap jitter; otherwise
- * uses the first 120 s of data.
- */
-function buildTrackPath(
-  ref: ReplayDriverTrack | undefined,
-  laps: LapData[] | undefined,
-  refDriverNum: number
-): string {
-  if (!ref || ref.t.length < 2) return "";
-
-  let startIdx = 0;
-  let endIdx = ref.t.length;
-  let used = false;
-
-  if (laps && laps.length > 0) {
-    const refLaps = laps
-      .filter((l) => l.driver_number === refDriverNum)
-      .sort((a, b) => a.lap_number - b.lap_number);
-    const lap2 = refLaps.find((l) => l.lap_number === 2);
-    const lap3 = refLaps.find((l) => l.lap_number === 3);
-    const lap4 = refLaps.find((l) => l.lap_number === 4);
-    let start: number | undefined;
-    let end: number | undefined;
-    if (lap2?.date_start) start = new Date(lap2.date_start).getTime();
-    if (lap4?.date_start) {
-      end = new Date(lap4.date_start).getTime();
-    } else if (lap3?.date_start && lap3?.lap_duration) {
-      end = new Date(lap3.date_start).getTime() + lap3.lap_duration * 1000;
-    }
-    if (start !== undefined && end !== undefined && end > start) {
-      const si = ref.t.findIndex((t) => t >= start!);
-      const ei = ref.t.findIndex((t) => t >= end!);
-      if (si >= 0 && ei > si) {
-        startIdx = si;
-        endIdx = ei;
-        used = true;
-      }
-    }
-  }
-
-  if (!used) {
-    // Skip forward until the reference driver has actually moved away from
-    // their first sample — for a race that's the grid/formation period,
-    // for practice/qualifying it's the garage. Without this the outline
-    // collapses to a tiny blob around the pit box. Once the driver is
-    // clearly on track we trace the next ~500 samples (~250 s of driving),
-    // guaranteed to contain >1 full lap on any circuit so the closed SVG
-    // path covers the whole track.
-    const x0 = ref.x[0];
-    const y0 = ref.y[0];
-    const MOVE_THRESHOLD = 15; // viewBox units (viewBox is 100×100)
-    let moveIdx = 0;
-    for (let i = 1; i < ref.x.length; i++) {
-      const dx = ref.x[i] - x0;
-      const dy = ref.y[i] - y0;
-      if (dx * dx + dy * dy > MOVE_THRESHOLD * MOVE_THRESHOLD) {
-        moveIdx = i;
-        break;
-      }
-    }
-    startIdx = moveIdx;
-    endIdx = Math.min(ref.x.length, startIdx + 500);
-  }
-
-  if (endIdx - startIdx < 2) return "";
-
-  const parts: string[] = [
-    `M ${ref.x[startIdx].toFixed(2)} ${ref.y[startIdx].toFixed(2)}`,
-  ];
-  for (let i = startIdx + 1; i < endIdx; i++) {
-    parts.push(`L ${ref.x[i].toFixed(2)} ${ref.y[i].toFixed(2)}`);
-  }
-  parts.push("Z");
-  return parts.join(" ");
 }
