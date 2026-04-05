@@ -42,6 +42,9 @@ yarn-error.log*
 # openf1 disk cache
 .cache/
 
+# local pipeline warehouse (DuckDB)
+/data/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
