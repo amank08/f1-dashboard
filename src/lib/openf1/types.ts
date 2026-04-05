@@ -174,14 +174,13 @@ export interface ReplaySnapshot {
   maxTime: number;
   /** SVG path (M/L/Z) tracing the full track outline (from MultiViewer). */
   trackPath: string;
-  /**
-   * Three sector-colored sub-paths of the outline, in S1/S2/S3 order.
-   * Empty array if sector boundaries couldn't be resolved for this
-   * circuit (missing legacy sector data).
-   */
-  sectors?: [string, string, string];
   /** Start/finish tick line coordinates, in the same viewBox. */
   sfLine?: { x1: number; y1: number; x2: number; y2: number };
+  /**
+   * Short perpendicular ticks at the S1→S2 and S2→S3 sector boundaries.
+   * Omitted when legacy sector data isn't available for the circuit.
+   */
+  sectorTicks?: Array<{ x1: number; y1: number; x2: number; y2: number }>;
   /** Always `"0 0 100 100"` — coordinates are pre-normalized. */
   viewBox: string;
   /** Keyed by driver_number as a string (JSON-friendly). */

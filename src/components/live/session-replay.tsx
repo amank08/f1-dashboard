@@ -138,8 +138,8 @@ export function SessionReplay({
         viewBox={snapshot.viewBox}
         driverPositions={driverPositions}
         drivers={drivers}
-        sectors={snapshot.sectors}
         sfLine={snapshot.sfLine}
+        sectorTicks={snapshot.sectorTicks}
       />
       <ReplayControls
         currentTime={replay.currentTime}

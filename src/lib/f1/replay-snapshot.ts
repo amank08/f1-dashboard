@@ -156,12 +156,11 @@ export function buildReplaySnapshot(
     if (t[t.length - 1] > globalMax) globalMax = t[t.length - 1];
   }
 
-  // Build the outline path + sector splits + S/F tick from the (rotated,
-  // projected) MV circuit — mirrors the logic used by the static circuit
-  // map on the calendar/results views so the replay matches visually.
+  // Build the outline path + S/F tick + sector boundary ticks from the
+  // (rotated, projected) MV circuit.
   let trackPath = "";
-  let sectors: [string, string, string] | undefined;
   let sfLine: ReplaySnapshot["sfLine"];
+  let sectorTicks: ReplaySnapshot["sectorTicks"];
 
   if (rotatedCircuit && rotatedCircuit.length > 1) {
     const projected = rotatedCircuit.map((p) => project(p.x, p.y));
@@ -200,61 +199,46 @@ export function buildReplaySnapshot(
       return nPoints - 1;
     };
 
-    const s1EndDist = sfDist + (ratios ? ratios.s1End : 1 / 3) * totalLen;
-    const s2EndDist = sfDist + (ratios ? ratios.s2End : 2 / 3) * totalLen;
+    // Perpendicular tick centered on a point, length in viewBox units.
+    const tickWindow = Math.max(1, Math.min(8, Math.floor(nPoints / 200)));
+    const tickAt = (
+      idx: number,
+      length: number
+    ): { x1: number; y1: number; x2: number; y2: number } => {
+      const p0 = projected[idx];
+      const pAhead = projected[(idx + tickWindow) % nPoints];
+      const pBehind = projected[(idx - tickWindow + nPoints) % nPoints];
+      const tdx = pAhead.x - pBehind.x;
+      const tdy = pAhead.y - pBehind.y;
+      const tlen = Math.hypot(tdx, tdy) || 1;
+      const perpX = -tdy / tlen;
+      const perpY = tdx / tlen;
+      return {
+        x1: Number((p0.x + perpX * length).toFixed(2)),
+        y1: Number((p0.y + perpY * length).toFixed(2)),
+        x2: Number((p0.x - perpX * length).toFixed(2)),
+        y2: Number((p0.y - perpY * length).toFixed(2)),
+      };
+    };
+
     const sfIdx = indexAtDist(sfDist);
-    const s1EndIdx = indexAtDist(s1EndDist);
-    const s2EndIdx = indexAtDist(s2EndDist);
+    sfLine = tickAt(sfIdx, 1.6);
 
-    const buildWrappedPath = (start: number, end: number): string => {
-      const segParts: string[] = [];
-      let i = start;
-      segParts.push(
-        `${projected[i].x.toFixed(2)},${projected[i].y.toFixed(2)}`
-      );
-      for (let guard = 0; guard <= nPoints; guard++) {
-        if (i === end) break;
-        i = (i + 1) % nPoints;
-        segParts.push(
-          `${projected[i].x.toFixed(2)},${projected[i].y.toFixed(2)}`
-        );
-      }
-      return segParts.length > 1 ? "M " + segParts.join(" L ") : "";
-    };
-
-    sectors = [
-      buildWrappedPath(sfIdx, s1EndIdx),
-      buildWrappedPath(s1EndIdx, s2EndIdx),
-      buildWrappedPath(s2EndIdx, sfIdx),
-    ];
-
-    // S/F tick: short line perpendicular to the tangent at sfIdx. Use a
-    // symmetric window around sfIdx so the direction is stable when the
-    // resampled MV points are close together.
-    const p0 = projected[sfIdx];
-    const window = Math.max(1, Math.min(8, Math.floor(nPoints / 200)));
-    const pAhead = projected[(sfIdx + window) % nPoints];
-    const pBehind = projected[(sfIdx - window + nPoints) % nPoints];
-    const tdx = pAhead.x - pBehind.x;
-    const tdy = pAhead.y - pBehind.y;
-    const tlen = Math.hypot(tdx, tdy) || 1;
-    const perpX = -tdy / tlen;
-    const perpY = tdx / tlen;
-    const tickLen = 1.6; // viewBox units (100×100)
-    sfLine = {
-      x1: Number((p0.x + perpX * tickLen).toFixed(2)),
-      y1: Number((p0.y + perpY * tickLen).toFixed(2)),
-      x2: Number((p0.x - perpX * tickLen).toFixed(2)),
-      y2: Number((p0.y - perpY * tickLen).toFixed(2)),
-    };
+    // Sector boundary ticks only when we actually have legacy ratios —
+    // falling back to equal thirds would draw misleading marks.
+    if (ratios) {
+      const s1EndIdx = indexAtDist(sfDist + ratios.s1End * totalLen);
+      const s2EndIdx = indexAtDist(sfDist + ratios.s2End * totalLen);
+      sectorTicks = [tickAt(s1EndIdx, 1.0), tickAt(s2EndIdx, 1.0)];
+    }
   }
 
   return {
     minTime: globalMin === Infinity ? 0 : globalMin,
     maxTime: globalMax === -Infinity ? 0 : globalMax,
     trackPath,
-    sectors,
     sfLine,
+    sectorTicks,
     viewBox: "0 0 100 100",
     drivers,
   };
