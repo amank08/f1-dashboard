@@ -637,7 +637,12 @@ export default function SessionAnalysisPage() {
             </div>
             <div className="space-y-4">
               {selectedSession && (
-                <CircuitMap circuitShortName={selectedSession.circuit_short_name} />
+                <CircuitMap
+                  circuitKey={selectedSession.circuit_key}
+                  year={selectedSession.year}
+                  circuitShortName={selectedSession.circuit_short_name}
+                  displayName={selectedSession.location}
+                />
               )}
               {selectedSession && (
                 <SessionInfoPanel
