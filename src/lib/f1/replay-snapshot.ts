@@ -19,6 +19,10 @@ import type {
   ReplayDriverTrack,
   ReplaySnapshot,
 } from "@/lib/openf1/types";
+import {
+  findSfOffsetRatio,
+  getSectorRatios,
+} from "@/lib/utils/sector-ratios";
 
 /** Target sample spacing after downsample (ms). ~2 Hz. */
 const DOWNSAMPLE_MS = 450;
@@ -43,7 +47,8 @@ export interface CircuitGeometry {
  */
 export function buildReplaySnapshot(
   raw: LocationSample[],
-  circuit?: CircuitGeometry
+  circuit?: CircuitGeometry,
+  circuitShortName?: string
 ): ReplaySnapshot {
   if (raw.length === 0) {
     return {
@@ -151,23 +156,105 @@ export function buildReplaySnapshot(
     if (t[t.length - 1] > globalMax) globalMax = t[t.length - 1];
   }
 
-  // Build the outline path from the (rotated, projected) MV circuit.
+  // Build the outline path + sector splits + S/F tick from the (rotated,
+  // projected) MV circuit — mirrors the logic used by the static circuit
+  // map on the calendar/results views so the replay matches visually.
   let trackPath = "";
+  let sectors: [string, string, string] | undefined;
+  let sfLine: ReplaySnapshot["sfLine"];
+
   if (rotatedCircuit && rotatedCircuit.length > 1) {
+    const projected = rotatedCircuit.map((p) => project(p.x, p.y));
+    const nPoints = projected.length;
+
     const parts: string[] = [];
-    for (let i = 0; i < rotatedCircuit.length; i++) {
-      const p = project(rotatedCircuit[i].x, rotatedCircuit[i].y);
+    for (let i = 0; i < nPoints; i++) {
       const cmd = i === 0 ? "M" : "L";
-      parts.push(`${cmd} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`);
+      parts.push(
+        `${cmd} ${projected[i].x.toFixed(2)} ${projected[i].y.toFixed(2)}`
+      );
     }
     parts.push("Z");
     trackPath = parts.join(" ");
+
+    // Arc length along the closed lap.
+    const cumulative: number[] = [0];
+    for (let i = 1; i < nPoints; i++) {
+      const dx = projected[i].x - projected[i - 1].x;
+      const dy = projected[i].y - projected[i - 1].y;
+      cumulative.push(cumulative[i - 1] + Math.hypot(dx, dy));
+    }
+    const totalLen = cumulative[cumulative.length - 1];
+
+    const ratios = circuitShortName ? getSectorRatios(circuitShortName) : null;
+    const sfRatio = circuitShortName
+      ? findSfOffsetRatio(circuitShortName, projected) ?? 0
+      : 0;
+    const sfDist = sfRatio * totalLen;
+
+    const indexAtDist = (dist: number): number => {
+      const d = ((dist % totalLen) + totalLen) % totalLen;
+      for (let i = 0; i < nPoints; i++) {
+        if (cumulative[i] >= d) return i;
+      }
+      return nPoints - 1;
+    };
+
+    const s1EndDist = sfDist + (ratios ? ratios.s1End : 1 / 3) * totalLen;
+    const s2EndDist = sfDist + (ratios ? ratios.s2End : 2 / 3) * totalLen;
+    const sfIdx = indexAtDist(sfDist);
+    const s1EndIdx = indexAtDist(s1EndDist);
+    const s2EndIdx = indexAtDist(s2EndDist);
+
+    const buildWrappedPath = (start: number, end: number): string => {
+      const segParts: string[] = [];
+      let i = start;
+      segParts.push(
+        `${projected[i].x.toFixed(2)},${projected[i].y.toFixed(2)}`
+      );
+      for (let guard = 0; guard <= nPoints; guard++) {
+        if (i === end) break;
+        i = (i + 1) % nPoints;
+        segParts.push(
+          `${projected[i].x.toFixed(2)},${projected[i].y.toFixed(2)}`
+        );
+      }
+      return segParts.length > 1 ? "M " + segParts.join(" L ") : "";
+    };
+
+    sectors = [
+      buildWrappedPath(sfIdx, s1EndIdx),
+      buildWrappedPath(s1EndIdx, s2EndIdx),
+      buildWrappedPath(s2EndIdx, sfIdx),
+    ];
+
+    // S/F tick: short line perpendicular to the tangent at sfIdx. Use a
+    // symmetric window around sfIdx so the direction is stable when the
+    // resampled MV points are close together.
+    const p0 = projected[sfIdx];
+    const window = Math.max(1, Math.min(8, Math.floor(nPoints / 200)));
+    const pAhead = projected[(sfIdx + window) % nPoints];
+    const pBehind = projected[(sfIdx - window + nPoints) % nPoints];
+    const tdx = pAhead.x - pBehind.x;
+    const tdy = pAhead.y - pBehind.y;
+    const tlen = Math.hypot(tdx, tdy) || 1;
+    const perpX = -tdy / tlen;
+    const perpY = tdx / tlen;
+    const tickLen = 1.6; // viewBox units (100×100)
+    sfLine = {
+      x1: Number((p0.x + perpX * tickLen).toFixed(2)),
+      y1: Number((p0.y + perpY * tickLen).toFixed(2)),
+      x2: Number((p0.x - perpX * tickLen).toFixed(2)),
+      y2: Number((p0.y - perpY * tickLen).toFixed(2)),
+    };
   }
 
   return {
     minTime: globalMin === Infinity ? 0 : globalMin,
     maxTime: globalMax === -Infinity ? 0 : globalMax,
     trackPath,
+    sectors,
+    sfLine,
     viewBox: "0 0 100 100",
     drivers,
   };

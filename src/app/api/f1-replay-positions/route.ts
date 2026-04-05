@@ -93,9 +93,8 @@ export async function GET(request: NextRequest) {
   // Key is versioned ("snap") — the old `f1replaypos_session=` entries
   // held raw LocationSample[] which are now too large to ship to the
   // browser; ignore them and build the compact snapshot fresh.
-  // "mv" suffix replaces the previous outline-from-telemetry snapshot
-  // (keyed as `snap`) with MultiViewer-sourced circuit geometry.
-  const cacheKey = `f1replaysnapmv_session=${sessionKey}`;
+  // "mv2" adds sector splits + S/F tick to the MV-sourced snapshot.
+  const cacheKey = `f1replaysnapmv2_session=${sessionKey}`;
   const cached = diskCacheGet(cacheKey) as ReplaySnapshot | undefined;
   if (cached) {
     return NextResponse.json(cached, { headers: { "X-Cache": "DISK" } });
@@ -142,7 +141,11 @@ export async function GET(request: NextRequest) {
       meeting.year
     );
 
-    const snapshot = buildReplaySnapshot(samples, circuit);
+    const snapshot = buildReplaySnapshot(
+      samples,
+      circuit,
+      session.circuit_short_name
+    );
     diskCacheSet(cacheKey, snapshot);
 
     return NextResponse.json(snapshot, {

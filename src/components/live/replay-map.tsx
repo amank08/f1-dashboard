@@ -9,13 +9,19 @@ interface ReplayMapProps {
   viewBox: string;
   driverPositions: Map<number, { x: number; y: number }>;
   drivers: Driver[];
+  sectors?: [string, string, string];
+  sfLine?: { x1: number; y1: number; x2: number; y2: number };
 }
+
+const SECTOR_COLORS = ["#ef4444", "#3b82f6", "#eab308"] as const;
 
 export const ReplayMap = memo(function ReplayMap({
   trackPath,
   viewBox,
   driverPositions,
   drivers,
+  sectors,
+  sfLine,
 }: ReplayMapProps) {
   const driverMap = new Map(drivers.map((d) => [d.driver_number, d]));
 
@@ -27,14 +33,41 @@ export const ReplayMap = memo(function ReplayMap({
         style={{ aspectRatio: "1 / 1", maxHeight: "calc(100vh - 300px)" }}
         preserveAspectRatio="xMidYMid meet"
       >
-        {/* Track outline */}
-        {trackPath && (
+        {/* Sector-colored outline (falls back to a single muted path if
+            we couldn't resolve the three sector splits for this circuit). */}
+        {sectors ? (
+          sectors.map((d, i) => (
+            <path
+              key={i}
+              d={d}
+              fill="none"
+              stroke={SECTOR_COLORS[i]}
+              strokeWidth="0.6"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              strokeOpacity={0.9}
+            />
+          ))
+        ) : trackPath ? (
           <path
             d={trackPath}
             fill="none"
             stroke="var(--f1-text-muted)"
             strokeWidth="0.5"
             strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        ) : null}
+
+        {/* Start/finish line */}
+        {sfLine && (
+          <line
+            x1={sfLine.x1}
+            y1={sfLine.y1}
+            x2={sfLine.x2}
+            y2={sfLine.y2}
+            stroke="#fff"
+            strokeWidth="0.7"
             strokeLinecap="round"
           />
         )}
