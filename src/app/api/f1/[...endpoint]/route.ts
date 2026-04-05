@@ -32,11 +32,17 @@ export async function GET(
     });
   }
 
-  // Rate limit then fetch from OpenF1
-  await rateLimiter.acquire();
-
+  // Rate limit then fetch from OpenF1, with one retry on 429 (our local
+  // token bucket is conservative but OpenF1's limits can still bite when
+  // many cold-start requests queue up at once).
   const url = `${BASE_URL}/${path}?${searchParams.toString()}`;
-  const response = await fetch(url);
+  await rateLimiter.acquire();
+  let response = await fetch(url);
+  if (response.status === 429) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await rateLimiter.acquire();
+    response = await fetch(url);
+  }
 
   if (!response.ok) {
     // Serve stale in-memory cache

@@ -1,17 +1,15 @@
 import { useState, useEffect } from "react";
-import type { LocationSample } from "@/lib/openf1/types";
+import type { ReplaySnapshot } from "@/lib/openf1/types";
 
 /**
- * Fetches decoded Position.z samples for a session from our server-side
- * archive decoder (which reads F1's static live-timing archive). OpenF1's
- * /location endpoint returns all-zeros on the free tier, so we bypass it
- * entirely for replay.
- *
- * Unlike the previous implementation this makes a single request — the
- * archive contains all drivers in one file, decoded server-side.
+ * Fetches a pre-processed `ReplaySnapshot` from our server-side archive
+ * decoder. The server reads F1's static live-timing archive, normalizes
+ * coordinates, downsamples to ~2 Hz, and returns compact parallel arrays
+ * per driver — ~2 MB instead of the ~80 MB raw payload OpenF1 / F1 would
+ * otherwise require decoding client-side.
  */
 export function useLocationData(sessionKey: number | null) {
-  const [data, setData] = useState<LocationSample[] | undefined>(undefined);
+  const [data, setData] = useState<ReplaySnapshot | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | undefined>(undefined);
 
@@ -40,9 +38,9 @@ export function useLocationData(sessionKey: number | null) {
           } catch {}
           throw new Error(msg);
         }
-        const samples = (await res.json()) as LocationSample[];
+        const snapshot = (await res.json()) as ReplaySnapshot;
         if (!cancelled) {
-          setData(samples);
+          setData(snapshot);
           setIsLoading(false);
         }
       } catch (err) {

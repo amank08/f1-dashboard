@@ -153,6 +153,33 @@ export interface LocationSample {
   z: number;
 }
 
+/**
+ * Compact, pre-processed replay payload. The server normalizes GPS samples
+ * to a [0, 100] viewBox, downsamples to ~2 Hz, and emits parallel arrays per
+ * driver so the client can run `getFrameAtTime` directly without reparsing
+ * millions of JSON objects. Shrinks a typical race archive from ~80 MB to
+ * ~2 MB.
+ */
+export interface ReplayDriverTrack {
+  /** ms since epoch, sorted ascending. */
+  t: number[];
+  /** Normalized viewBox x, aligned with `t`. */
+  x: number[];
+  /** Normalized viewBox y (SVG-flipped), aligned with `t`. */
+  y: number[];
+}
+
+export interface ReplaySnapshot {
+  minTime: number;
+  maxTime: number;
+  /** SVG path (M/L/Z) tracing one reference driver's lap for the track outline. */
+  trackPath: string;
+  /** Always `"0 0 100 100"` — coordinates are pre-normalized. */
+  viewBox: string;
+  /** Keyed by driver_number as a string (JSON-friendly). */
+  drivers: Record<string, ReplayDriverTrack>;
+}
+
 export interface Interval {
   session_key: number;
   meeting_key: number;

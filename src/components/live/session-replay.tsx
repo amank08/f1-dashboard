@@ -4,7 +4,6 @@ import { useMemo, useEffect, useRef } from "react";
 import { useLocationData } from "@/lib/hooks/use-location-data";
 import { useReplayState } from "@/lib/hooks/use-replay-state";
 import {
-  processLocationData,
   getFrameAtTime,
   getLapAtTime,
   buildSessionPhases,
@@ -37,28 +36,18 @@ export function SessionReplay({
 }: SessionReplayProps) {
   const useLapSkips = LAP_SESSION_TYPES.has(sessionType);
 
-  const driverNumbers = useMemo(
-    () => drivers.map((d) => d.driver_number),
-    [drivers]
-  );
-
-  const { data: locationData, isLoading, error } = useLocationData(sessionKey);
-
-  const processedData = useMemo(() => {
-    if (!locationData || locationData.length === 0) return null;
-    return processLocationData(locationData, laps, driverNumbers);
-  }, [locationData, laps, driverNumbers]);
+  const { data: snapshot, isLoading, error } = useLocationData(sessionKey);
 
   const replay = useReplayState(
-    processedData?.minTime ?? 0,
-    processedData?.maxTime ?? 0,
+    snapshot?.minTime ?? 0,
+    snapshot?.maxTime ?? 0,
     laps
   );
 
   const driverPositions = useMemo(() => {
-    if (!processedData) return new Map<number, { x: number; y: number }>();
-    return getFrameAtTime(processedData, replay.currentTime);
-  }, [processedData, replay.currentTime]);
+    if (!snapshot) return new Map<number, { x: number; y: number }>();
+    return getFrameAtTime(snapshot, replay.currentTime);
+  }, [snapshot, replay.currentTime]);
 
   // Lap-based status for Race/Sprint
   const { currentLap, totalLaps } = useMemo(
@@ -84,7 +73,7 @@ export function SessionReplay({
   // even when the replay is paused or data loads within the throttle window.
   const lastReportRef = useRef(0);
   useEffect(() => {
-    if (!onTimeChange || !processedData) return;
+    if (!onTimeChange || !snapshot) return;
 
     const now = performance.now();
 
@@ -102,7 +91,7 @@ export function SessionReplay({
     }, remaining);
 
     return () => clearTimeout(timerId);
-  }, [replay.currentTime, onTimeChange, processedData]);
+  }, [replay.currentTime, onTimeChange, snapshot]);
 
   if (isLoading) {
     return (
@@ -133,7 +122,7 @@ export function SessionReplay({
     );
   }
 
-  if (!locationData || locationData.length === 0 || !processedData) {
+  if (!snapshot || Object.keys(snapshot.drivers).length === 0) {
     return (
       <EmptyState
         title="No location data"
@@ -145,15 +134,15 @@ export function SessionReplay({
   return (
     <div className="space-y-4">
       <ReplayMap
-        trackPath={processedData.trackPath}
-        viewBox={processedData.viewBox}
+        trackPath={snapshot.trackPath}
+        viewBox={snapshot.viewBox}
         driverPositions={driverPositions}
         drivers={drivers}
       />
       <ReplayControls
         currentTime={replay.currentTime}
-        minTime={processedData.minTime}
-        maxTime={processedData.maxTime}
+        minTime={snapshot.minTime}
+        maxTime={snapshot.maxTime}
         isPlaying={replay.isPlaying}
         speed={replay.speed}
         statusLabel={statusLabel}

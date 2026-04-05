@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildPositionArchiveUrl } from "@/lib/f1/archive-path";
 import { fetchPositionArchive } from "@/lib/f1/position-archive";
+import { buildReplaySnapshot } from "@/lib/f1/replay-snapshot";
 import { diskCacheGet, diskCacheSet } from "@/lib/openf1/disk-cache";
 import { rateLimiter } from "@/lib/openf1/rate-limiter";
-import type { Meeting, Session, LocationSample } from "@/lib/openf1/types";
+import type {
+  LapData,
+  Meeting,
+  Session,
+  LocationSample,
+  ReplaySnapshot,
+} from "@/lib/openf1/types";
 
 // Next.js runtime: Node only (needs zlib).
 export const runtime = "nodejs";
@@ -45,8 +52,11 @@ export async function GET(request: NextRequest) {
   }
 
   // Disk cache: archive data is immutable for historical sessions.
-  const cacheKey = `f1replaypos_session=${sessionKey}`;
-  const cached = diskCacheGet(cacheKey);
+  // Key is versioned ("snap") — the old `f1replaypos_session=` entries
+  // held raw LocationSample[] which are now too large to ship to the
+  // browser; ignore them and build the compact snapshot fresh.
+  const cacheKey = `f1replaysnap_session=${sessionKey}`;
+  const cached = diskCacheGet(cacheKey) as ReplaySnapshot | undefined;
   if (cached) {
     return NextResponse.json(cached, { headers: { "X-Cache": "DISK" } });
   }
@@ -83,12 +93,18 @@ export async function GET(request: NextRequest) {
       session.meeting_key
     );
 
-    // Cache the decoded samples. These files can be several MB per race;
-    // disk is fine, but we opt into the cache explicitly by prefixing the
-    // key outside the `location` skip pattern.
-    diskCacheSet(cacheKey, samples);
+    // Laps are optional — used only for a cleaner track outline. We read
+    // them from the shared disk cache if available (usually cached from
+    // the results view) but never make a live OpenF1 call here, since
+    // this route runs on cold replay loads and must not amplify 429s.
+    const cachedLaps = diskCacheGet(
+      `laps?session_key=${sessionKey}`
+    ) as LapData[] | undefined;
 
-    return NextResponse.json(samples, {
+    const snapshot = buildReplaySnapshot(samples, cachedLaps);
+    diskCacheSet(cacheKey, snapshot);
+
+    return NextResponse.json(snapshot, {
       headers: {
         "X-Cache": "MISS",
         "X-Archive-Url": archiveUrl,
