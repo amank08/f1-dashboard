@@ -1,85 +1,48 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import type { LocationSample } from "@/lib/openf1/types";
 
-async function fetchWithRetry(
-  url: string,
-  retries = 3
-): Promise<Response> {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    const res = await fetch(url);
-    if (res.status === 429 && attempt < retries) {
-      // Exponential backoff: 2s, 4s, 8s
-      await new Promise((r) => setTimeout(r, 2000 * 2 ** attempt));
-      continue;
-    }
-    return res;
-  }
-  throw new Error("Max retries exceeded");
-}
-
 /**
- * Fetches location data for all drivers in a session.
- * All drivers are fetched in parallel — the server-side proxy handles
- * rate limiting and caching (7-day TTL), so cached requests return
- * instantly without hitting OpenF1.
+ * Fetches decoded Position.z samples for a session from our server-side
+ * archive decoder (which reads F1's static live-timing archive). OpenF1's
+ * /location endpoint returns all-zeros on the free tier, so we bypass it
+ * entirely for replay.
+ *
+ * Unlike the previous implementation this makes a single request — the
+ * archive contains all drivers in one file, decoded server-side.
  */
-export function useLocationData(
-  sessionKey: number | null,
-  driverNumbers: number[]
-) {
+export function useLocationData(sessionKey: number | null) {
   const [data, setData] = useState<LocationSample[] | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | undefined>(undefined);
-  const [progress, setProgress] = useState({ loaded: 0, total: 0 });
-
-  const driversKey = useMemo(
-    () => [...driverNumbers].sort((a, b) => a - b).join(","),
-    [driverNumbers]
-  );
 
   useEffect(() => {
-    if (!sessionKey || !driversKey) {
+    if (!sessionKey) {
       setData(undefined);
       setIsLoading(false);
-      setProgress({ loaded: 0, total: 0 });
       return;
     }
 
-    const nums = driversKey.split(",").map(Number);
     let cancelled = false;
-
     setData(undefined);
     setIsLoading(true);
     setError(undefined);
-    setProgress({ loaded: 0, total: nums.length });
 
-    async function fetchAll() {
+    (async () => {
       try {
-        let completedCount = 0;
-
-        const results = await Promise.all(
-          nums.map(async (driverNum) => {
-            try {
-              const res = await fetchWithRetry(
-                `/api/f1/location?session_key=${sessionKey}&driver_number=${driverNum}`
-              );
-              if (!res.ok) {
-                if (res.status === 422) return [];
-                return [];
-              }
-              return (await res.json()) as LocationSample[];
-            } catch {
-              return [];
-            } finally {
-              completedCount++;
-              if (!cancelled)
-                setProgress({ loaded: completedCount, total: nums.length });
-            }
-          })
+        const res = await fetch(
+          `/api/f1-replay-positions?session_key=${sessionKey}`
         );
-
+        if (!res.ok) {
+          let msg = `Archive fetch failed: ${res.status}`;
+          try {
+            const body = (await res.json()) as { error?: string };
+            if (body?.error) msg = body.error;
+          } catch {}
+          throw new Error(msg);
+        }
+        const samples = (await res.json()) as LocationSample[];
         if (!cancelled) {
-          setData(results.flat());
+          setData(samples);
           setIsLoading(false);
         }
       } catch (err) {
@@ -88,14 +51,12 @@ export function useLocationData(
           setIsLoading(false);
         }
       }
-    }
-
-    fetchAll();
+    })();
 
     return () => {
       cancelled = true;
     };
-  }, [sessionKey, driversKey]);
+  }, [sessionKey]);
 
-  return { data, isLoading, error, progress };
+  return { data, isLoading, error };
 }

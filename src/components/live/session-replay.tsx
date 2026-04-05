@@ -42,10 +42,7 @@ export function SessionReplay({
     [drivers]
   );
 
-  const { data: locationData, isLoading, error, progress } = useLocationData(
-    sessionKey,
-    driverNumbers
-  );
+  const { data: locationData, isLoading, error } = useLocationData(sessionKey);
 
   const processedData = useMemo(() => {
     if (!locationData || locationData.length === 0) return null;
@@ -108,23 +105,18 @@ export function SessionReplay({
   }, [replay.currentTime, onTimeChange, processedData]);
 
   if (isLoading) {
-    const pct = progress.total > 0
-      ? Math.round((progress.loaded / progress.total) * 100)
-      : 0;
     return (
       <div className="space-y-4">
         <div className="flex aspect-square w-full items-center justify-center rounded-lg border border-f1-border bg-f1-surface">
           <div className="w-64 text-center">
             <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-f1-border border-t-f1-red" />
-            <p className="mb-3 text-sm text-f1-text-secondary">
-              Loading location data… {progress.loaded}/{progress.total} drivers
+            <p className="text-sm text-f1-text-secondary">
+              Loading position data…
             </p>
-            <div className="h-2 overflow-hidden rounded-full bg-f1-border">
-              <div
-                className="h-full rounded-full bg-f1-red transition-all duration-300"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
+            <p className="mt-1 text-xs text-f1-text-muted">
+              Decoding the F1 live-timing archive. First load can take a few
+              seconds.
+            </p>
           </div>
         </div>
         <Skeleton className="h-24" />
