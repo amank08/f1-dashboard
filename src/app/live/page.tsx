@@ -733,7 +733,7 @@ export default function SessionAnalysisPage() {
       {sessionKey && viewMode === "replay" && !dataUnavailable && (
         <div className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
-            <div>
+            <div className="space-y-6">
               {drivers && laps ? (
                 <SessionReplay
                   sessionKey={sessionKey}
@@ -751,8 +751,17 @@ export default function SessionAnalysisPage() {
                   <Skeleton className="h-24" />
                 </div>
               )}
+              {dataLoading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 20 }).map((_, i) => (
+                    <Skeleton key={i} className="h-10" />
+                  ))}
+                </div>
+              ) : (
+                <TimingBoard entries={replayTimingEntries} retiredDrivers={retiredDrivers} />
+              )}
             </div>
-            <div className="space-y-4">
+            <div className="space-y-4 order-last lg:order-none">
               <h3 className="text-sm font-semibold uppercase text-f1-text-muted">
                 Race Control
               </h3>
@@ -763,15 +772,6 @@ export default function SessionAnalysisPage() {
               )}
             </div>
           </div>
-          {dataLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 20 }).map((_, i) => (
-                <Skeleton key={i} className="h-10" />
-              ))}
-            </div>
-          ) : (
-            <TimingBoard entries={replayTimingEntries} retiredDrivers={retiredDrivers} />
-          )}
         </div>
       )}
     </div>
