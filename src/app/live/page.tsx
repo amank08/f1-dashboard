@@ -328,23 +328,21 @@ export default function SessionAnalysisPage() {
     if (!replayTimingEntries || replayTimingEntries.length === 0) return map;
 
     if (isQuali && raceControl && replayTime != null && positions) {
-      // Determine qualifying phase end times from race control.
-      // Add 90s buffer after SESSION FINISHED so drivers can finish
-      // their flying lap before we snapshot eliminations.
+      // Qualifying has 3 SESSION FINISHED messages (Q1, Q2, Q3).
+      // Add 90s buffer so drivers can finish flying laps before
+      // we snapshot eliminations.
       const cutoff = new Date(replayTime).toISOString();
-      let q1EndTime: number | null = null;
-      let q2EndTime: number | null = null;
+      const finishedTimes: number[] = [];
 
       for (const msg of raceControl) {
         if (msg.date > cutoff) continue;
-        if (msg.category !== "SessionStatus" || msg.message !== "SESSION FINISHED") continue;
-        const qp = msg.qualifying_phase;
-        if (qp === null || qp === undefined) {
-          if (!q1EndTime) q1EndTime = new Date(msg.date).getTime() + 90_000;
-        } else if (qp === 2) {
-          q2EndTime = new Date(msg.date).getTime() + 90_000;
+        if (msg.category === "SessionStatus" && msg.message === "SESSION FINISHED") {
+          finishedTimes.push(new Date(msg.date).getTime() + 90_000);
         }
       }
+
+      const q1EndTime = finishedTimes[0] ?? null;
+      const q2EndTime = finishedTimes[1] ?? null;
 
       // Snapshot positions at a given time to find the bottom N
       const positionsAt = (time: number): Map<number, number> => {
