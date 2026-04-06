@@ -43,7 +43,7 @@ interface SectorBests {
   s3: number | null;
 }
 
-interface TimingEntry {
+export interface TimingEntry {
   position: number;
   driverNumber: number;
   acronym: string;

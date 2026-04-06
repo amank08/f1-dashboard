@@ -702,6 +702,7 @@ export default function SessionAnalysisPage() {
                   laps={laps}
                   raceControl={raceControl ?? []}
                   onTimeChange={handleReplayTimeChange}
+                  timingEntries={replayTimingEntries}
                 />
               ) : (
                 <div className="space-y-4">

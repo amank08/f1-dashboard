@@ -14,6 +14,7 @@ import { ReplayControls } from "@/components/live/replay-controls";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { Driver, LapData, RaceControlMessage } from "@/lib/openf1/types";
+import type { TimingEntry } from "@/components/live/timing-board";
 
 interface SessionReplayProps {
   sessionKey: number;
@@ -22,6 +23,7 @@ interface SessionReplayProps {
   laps: LapData[];
   raceControl: RaceControlMessage[];
   onTimeChange?: (time: number) => void;
+  timingEntries?: TimingEntry[];
 }
 
 const LAP_SESSION_TYPES = new Set(["Race", "Sprint"]);
@@ -33,6 +35,7 @@ export function SessionReplay({
   laps,
   raceControl,
   onTimeChange,
+  timingEntries,
 }: SessionReplayProps) {
   const useLapSkips = LAP_SESSION_TYPES.has(sessionType);
 
@@ -55,30 +58,24 @@ export function SessionReplay({
     [replay.currentTime, laps]
   );
 
-  // Compute leader / lapped status for map styling
+  // Derive leader / lapped status from timing board entries
   const driverLapStatus = useMemo(() => {
-    const cutoff = replay.currentTime;
-    const lapByDriver = new Map<number, number>();
-    for (const l of laps) {
-      const t = new Date(l.date_start).getTime();
-      if (t <= cutoff) {
-        const cur = lapByDriver.get(l.driver_number) ?? 0;
-        if (l.lap_number > cur) lapByDriver.set(l.driver_number, l.lap_number);
+    const status = new Map<number, "leader" | "lapped" | null>();
+    if (!timingEntries) return status;
+    for (const e of timingEntries) {
+      if (e.position === 1) {
+        status.set(e.driverNumber, "leader");
+      } else if (
+        typeof e.gapToLeader === "string" &&
+        /LAP/i.test(e.gapToLeader)
+      ) {
+        status.set(e.driverNumber, "lapped");
+      } else {
+        status.set(e.driverNumber, null);
       }
     }
-    let leaderLap = 0;
-    let leaderDriver: number | null = null;
-    for (const [dn, lap] of lapByDriver) {
-      if (lap > leaderLap) { leaderLap = lap; leaderDriver = dn; }
-    }
-    const status = new Map<number, "leader" | "lapped" | null>();
-    for (const [dn, lap] of lapByDriver) {
-      if (dn === leaderDriver) status.set(dn, "leader");
-      else if (lap < leaderLap) status.set(dn, "lapped");
-      else status.set(dn, null);
-    }
     return status;
-  }, [replay.currentTime, laps]);
+  }, [timingEntries]);
 
   // Phase-based status for Practice/Qualifying
   const phases = useMemo(
