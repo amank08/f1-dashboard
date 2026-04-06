@@ -13,6 +13,7 @@ import type { Driver, LapData } from "@/lib/openf1/types";
 import { getTeamColor } from "@/lib/utils/colors";
 import { formatLapTime } from "@/lib/utils/formatters";
 import { cn } from "@/lib/utils/cn";
+import { CustomSelect } from "@/components/ui/custom-select";
 
 interface TeammateH2HChartProps {
   drivers: Driver[];
@@ -335,23 +336,21 @@ function DriverSelector({
   return (
     <div className="flex items-center gap-2">
       <div
-        className="h-3 w-3 rounded-full"
+        className="h-3 w-3 shrink-0 rounded-full"
         style={{
           backgroundColor: dashed ? "transparent" : color,
           border: dashed ? `2px dashed ${color}` : "none",
         }}
       />
-      <select
-        className="rounded-md border border-f1-border bg-f1-card px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-f1-red"
-        value={value ?? ""}
-        onChange={(e) => onChange(Number(e.target.value))}
-      >
-        {drivers.map((d) => (
-          <option key={d.driver_number} value={d.driver_number}>
-            {d.name_acronym} — {formatLapTime(bestLaps.get(d.driver_number)!.lapTime)}
-          </option>
-        ))}
-      </select>
+      <CustomSelect
+        value={value?.toString() ?? ""}
+        onChange={(v) => onChange(Number(v))}
+        className="w-44"
+        options={drivers.map((d) => ({
+          value: String(d.driver_number),
+          label: `${d.name_acronym} — ${formatLapTime(bestLaps.get(d.driver_number)!.lapTime)}`,
+        }))}
+      />
     </div>
   );
 }

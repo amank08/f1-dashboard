@@ -42,10 +42,6 @@ const RACE_SESSION_TYPES = new Set([
   "Practice",
 ]);
 
-const selectClasses = cn(
-  "rounded-md border border-f1-border bg-f1-surface px-3 py-2 text-sm font-semibold text-f1-text",
-  "focus:border-f1-red focus:outline-none focus:ring-1 focus:ring-f1-red"
-);
 
 function findLatestCompletedSession(sessions: Session[]): Session | undefined {
   return sessions
@@ -543,19 +539,17 @@ export default function SessionAnalysisPage() {
           }))}
         />
 
-        <select
-          value={sessionKey ?? ""}
-          onChange={(e) => handleSessionChange(Number(e.target.value))}
+        <CustomSelect
+          value={sessionKey?.toString() ?? ""}
+          onChange={(v) => handleSessionChange(Number(v))}
           disabled={!meetingKey || sessionsLoading || availableSessions.length === 0}
-          className={selectClasses}
-        >
-          {!sessionKey && <option value="">Select session…</option>}
-          {availableSessions.map((s) => (
-            <option key={s.session_key} value={s.session_key}>
-              {s.session_name}
-            </option>
-          ))}
-        </select>
+          placeholder="Select session…"
+          className="w-48"
+          options={availableSessions.map((s) => ({
+            value: String(s.session_key),
+            label: s.session_name,
+          }))}
+        />
 
         {sessionKey && (
           <div className="flex rounded-md border border-f1-border">
