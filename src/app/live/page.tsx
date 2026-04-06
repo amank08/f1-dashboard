@@ -316,22 +316,45 @@ export default function SessionAnalysisPage() {
     );
   }, [replayTime, drivers, positions, intervals, stints, laps]);
 
-  // Detect retired drivers from timing entries (same as circuit map)
+  // Detect retired drivers from timing entries.
+  // A driver is retired if their lap count is <90% of the leader's AND
+  // they haven't started a new lap recently (within 3 min of replay time).
+  // This avoids marking drivers who rejoin after a garage stop.
   const retiredDrivers = useMemo(() => {
     const set = new Set<number>();
     if (!replayTimingEntries || replayTimingEntries.length === 0) return set;
     const leaderEntry = replayTimingEntries.find((e) => e.position === 1);
     const leaderLap = leaderEntry?.currentLap ?? 0;
     const dnfThreshold = Math.floor(leaderLap * 0.9);
-    if (leaderLap > 2) {
-      for (const e of replayTimingEntries) {
-        if (e.position !== 1 && e.currentLap < dnfThreshold) {
-          set.add(e.driverNumber);
+    if (leaderLap <= 2) return set;
+
+    // Find each driver's latest lap start time
+    const latestLapStart = new Map<number, number>();
+    if (laps && replayTime != null) {
+      const cutoff = replayTime;
+      for (const l of laps) {
+        const t = new Date(l.date_start).getTime();
+        if (t <= cutoff) {
+          const prev = latestLapStart.get(l.driver_number) ?? 0;
+          if (t > prev) latestLapStart.set(l.driver_number, t);
         }
       }
     }
+
+    for (const e of replayTimingEntries) {
+      if (e.position === 1) continue;
+      if (e.currentLap >= dnfThreshold) continue;
+      // Check if this driver is still actively lapping
+      const lastStart = latestLapStart.get(e.driverNumber);
+      if (replayTime != null && lastStart != null) {
+        const staleness = replayTime - lastStart;
+        // If they started a lap within 3 minutes, they're still racing
+        if (staleness < 180_000) continue;
+      }
+      set.add(e.driverNumber);
+    }
     return set;
-  }, [replayTimingEntries]);
+  }, [replayTimingEntries, laps, replayTime]);
 
   const replayRaceControl = useMemo(() => {
     if (!replayTime || !raceControl) return raceControl ?? [];
