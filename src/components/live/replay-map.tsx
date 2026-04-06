@@ -42,7 +42,7 @@ export const ReplayMap = memo(function ReplayMap({
       <svg
         viewBox={viewBox}
         className="h-full w-full"
-        style={{ maxHeight: "calc(100vh - 350px)" }}
+        style={{ minHeight: "300px", maxHeight: "calc(100vh - 350px)" }}
         preserveAspectRatio="xMidYMid meet"
       >
         {/* Track outline — dimmed when sector paths are showing flags */}
@@ -51,7 +51,7 @@ export const ReplayMap = memo(function ReplayMap({
             d={trackPath}
             fill="none"
             stroke="var(--f1-text-muted)"
-            strokeWidth="0.5"
+            strokeWidth="0.8"
             strokeLinejoin="round"
             strokeLinecap="round"
           />
@@ -69,7 +69,7 @@ export const ReplayMap = memo(function ReplayMap({
               d={path}
               fill="none"
               stroke={color}
-              strokeWidth="1.2"
+              strokeWidth="1.6"
               strokeLinejoin="round"
               strokeLinecap="round"
               opacity={0.8}
@@ -86,7 +86,7 @@ export const ReplayMap = memo(function ReplayMap({
             x2={tick.x2}
             y2={tick.y2}
             stroke="var(--f1-text-muted)"
-            strokeWidth="0.4"
+            strokeWidth="0.6"
             strokeLinecap="round"
           />
         ))}
@@ -99,7 +99,7 @@ export const ReplayMap = memo(function ReplayMap({
             x2={sfLine.x2}
             y2={sfLine.y2}
             stroke="#fff"
-            strokeWidth="0.7"
+            strokeWidth="1.0"
             strokeLinecap="round"
           />
         )}
@@ -124,17 +124,17 @@ export const ReplayMap = memo(function ReplayMap({
               <circle
                 cx={pos.x}
                 cy={pos.y}
-                r={1.2}
+                r={1.6}
                 fill={isRetired ? "#EF4444" : color}
                 stroke="#000"
-                strokeWidth="0.2"
+                strokeWidth="0.3"
               />
               <text
-                x={pos.x + 1.8}
-                y={pos.y + 0.5}
+                x={pos.x + 2.2}
+                y={pos.y + 0.7}
                 fill={textColor}
-                fontSize="2"
-                fontWeight="600"
+                fontSize="2.6"
+                fontWeight="700"
                 fontFamily="inherit"
               >
                 {driver.name_acronym}
