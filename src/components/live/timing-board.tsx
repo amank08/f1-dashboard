@@ -413,14 +413,14 @@ export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[
                         : `${entry.gapToLeader}`
                       : "—"}
                 </td>
-                <td className={cn("px-2 py-2 font-mono text-xs whitespace-nowrap", getSectorColor(s1, pb.s1, ob.s1))}>
-                  <span className="inline-block w-14 text-right">{s1 !== null ? s1.toFixed(3) : "—"}</span>
+                <td className={cn("px-2 py-2 text-right font-mono text-xs whitespace-nowrap", getSectorColor(s1, pb.s1, ob.s1))}>
+                  {s1 !== null ? s1.toFixed(3) : "—"}
                 </td>
-                <td className={cn("px-2 py-2 font-mono text-xs whitespace-nowrap", getSectorColor(s2, pb.s2, ob.s2))}>
-                  <span className="inline-block w-14 text-right">{s2 !== null ? s2.toFixed(3) : "—"}</span>
+                <td className={cn("px-2 py-2 text-right font-mono text-xs whitespace-nowrap", getSectorColor(s2, pb.s2, ob.s2))}>
+                  {s2 !== null ? s2.toFixed(3) : "—"}
                 </td>
-                <td className={cn("px-2 py-2 font-mono text-xs whitespace-nowrap", getSectorColor(s3, pb.s3, ob.s3))}>
-                  <span className="inline-block w-14 text-right">{s3 !== null ? s3.toFixed(3) : "—"}</span>
+                <td className={cn("px-2 py-2 text-right font-mono text-xs whitespace-nowrap", getSectorColor(s3, pb.s3, ob.s3))}>
+                  {s3 !== null ? s3.toFixed(3) : "—"}
                 </td>
                 <td className="px-2 py-2 text-center">
                   <MiniSectors segments={entry.segments} />
