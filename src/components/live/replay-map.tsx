@@ -74,7 +74,7 @@ export const ReplayMap = memo(function ReplayMap({
         {Array.from(driverPositions.entries()).map(([driverNum, pos]) => {
           const driver = driverMap.get(driverNum);
           if (!driver) return null;
-          const color = getTeamColor(driver.team_colour);
+          const color = getTeamColor(driver.team_colour, driver.team_name);
 
           return (
             <g key={driverNum}>

@@ -90,7 +90,7 @@ export function TeamRadioCard({
           {sorted.map((radio, i) => {
             const driver = driverMap.get(radio.driver_number);
             const teamColor = driver?.team_colour
-              ? getTeamColor(driver.team_colour)
+              ? getTeamColor(driver.team_colour, driver.team_name)
               : undefined;
 
             return (

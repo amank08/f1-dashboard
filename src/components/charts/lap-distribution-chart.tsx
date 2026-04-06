@@ -24,6 +24,7 @@ interface LapPoint {
   name: string;
   lapTime: number;
   teamColour: string;
+  teamName?: string;
   lap: number;
   lapNumber: number;
   compound: string | null;
@@ -136,6 +137,7 @@ export function LapDistributionChart({
       name: driver.name_acronym,
       lapTime: l.lap_duration!,
       teamColour: driver.team_colour,
+      teamName: driver.team_name,
       lap: driverIndex.get(l.driver_number)!,
       lapNumber: l.lap_number,
       compound: getCompoundForLap(stintsByDriver, l.driver_number, l.lap_number),
@@ -186,7 +188,7 @@ export function LapDistributionChart({
             {points.map((p, i) => (
               <Cell
                 key={i}
-                fill={getTeamColor(p.teamColour)}
+                fill={getTeamColor(p.teamColour, p.teamName)}
                 fillOpacity={0.6}
                 r={3}
               />

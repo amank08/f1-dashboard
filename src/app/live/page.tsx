@@ -274,13 +274,17 @@ export default function SessionAnalysisPage() {
   const gridVsFinishData = useMemo(() => {
     if (!raceStats || !drivers) return [];
     const driverLookup = new Map(drivers.map((d) => [d.driver_number, d]));
-    return raceStats.changes.map((c) => ({
-      name: driverLookup.get(c.driverNumber)?.name_acronym ?? String(c.driverNumber),
-      gridPos: c.gridPos,
-      finishPos: c.finishPos,
-      teamColour: driverLookup.get(c.driverNumber)?.team_colour ?? "888888",
-      change: c.change,
-    }));
+    return raceStats.changes.map((c) => {
+      const d = driverLookup.get(c.driverNumber);
+      return {
+        name: d?.name_acronym ?? String(c.driverNumber),
+        gridPos: c.gridPos,
+        finishPos: c.finishPos,
+        teamColour: d?.team_colour ?? "888888",
+        teamName: d?.team_name,
+        change: c.change,
+      };
+    });
   }, [raceStats, drivers]);
 
   // Filtered timing data for replay mode sidebar

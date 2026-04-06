@@ -12,6 +12,7 @@ import { DriverSelector } from "@/components/selectors/driver-selector";
 import { LapTimeChart } from "@/components/charts/lap-time-chart";
 import { PositionChart } from "@/components/charts/position-chart";
 import { GapChart } from "@/components/charts/gap-chart";
+import { getTeamColor } from "@/lib/utils/colors";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -118,8 +119,8 @@ export default function LapsPage({
                 .map((d) => [d.driver_number, d])
             );
             const driverColors: Record<string, string> = {};
-            for (const [num, d] of driverLookup) {
-              driverColors[d.name_acronym] = d.team_colour;
+            for (const [, d] of driverLookup) {
+              driverColors[d.name_acronym] = getTeamColor(d.team_colour, d.team_name).replace('#', '');
             }
 
             // Build cumulative time per driver per lap

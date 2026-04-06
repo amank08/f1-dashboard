@@ -75,7 +75,7 @@ export function PitStrategyChart({
               <span
                 className="text-sm font-bold"
                 style={{
-                  color: driver ? getTeamColor(driver.team_colour) : "#888",
+                  color: driver ? getTeamColor(driver.team_colour, driver.team_name) : "#888",
                 }}
               >
                 {driver?.name_acronym ?? driverNum}

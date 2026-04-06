@@ -45,7 +45,7 @@ export function DriverSelector({
             )}
             style={
               isSelected
-                ? { backgroundColor: getTeamColor(driver.team_colour) }
+                ? { backgroundColor: getTeamColor(driver.team_colour, driver.team_name) }
                 : undefined
             }
           >

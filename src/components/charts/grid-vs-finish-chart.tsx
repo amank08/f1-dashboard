@@ -17,6 +17,7 @@ interface GridVsFinishData {
   gridPos: number;
   finishPos: number;
   teamColour: string;
+  teamName?: string;
   change: number;
 }
 
@@ -108,7 +109,7 @@ export function GridVsFinishChart({ data }: { data: GridVsFinishData[] }) {
           <Scatter
             data={data}
             fill="#E10600"
-            shape={(props: { cx?: number; cy?: number; payload?: { teamColour: string } }) => {
+            shape={(props: { cx?: number; cy?: number; payload?: { teamColour: string; teamName?: string } }) => {
               const { cx, cy, payload } = props;
               if (cx == null || cy == null || !payload) return null;
               return (
@@ -116,7 +117,7 @@ export function GridVsFinishChart({ data }: { data: GridVsFinishData[] }) {
                   cx={cx}
                   cy={cy}
                   r={6}
-                  fill={getTeamColor(payload.teamColour)}
+                  fill={getTeamColor(payload.teamColour, payload.teamName)}
                   stroke="#15151E"
                   strokeWidth={1.5}
                 />

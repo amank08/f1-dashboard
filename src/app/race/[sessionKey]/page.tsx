@@ -149,13 +149,17 @@ export default function RaceResultsPage({
               }
             }
             const changes = getPositionChanges(gridMap, finishMap);
-            const chartData = changes.map((c) => ({
-              name: driverLookup.get(c.driverNumber)?.name_acronym ?? String(c.driverNumber),
-              gridPos: c.gridPos,
-              finishPos: c.finishPos,
-              teamColour: driverLookup.get(c.driverNumber)?.team_colour ?? "888888",
-              change: c.change,
-            }));
+            const chartData = changes.map((c) => {
+              const d = driverLookup.get(c.driverNumber);
+              return {
+                name: d?.name_acronym ?? String(c.driverNumber),
+                gridPos: c.gridPos,
+                finishPos: c.finishPos,
+                teamColour: d?.team_colour ?? "888888",
+                teamName: d?.team_name,
+                change: c.change,
+              };
+            });
             return chartData.length > 0 ? <GridVsFinishChart data={chartData} /> : null;
           })()}
         </>

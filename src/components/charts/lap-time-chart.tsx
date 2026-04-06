@@ -90,7 +90,7 @@ export function LapTimeChart({
               type="monotone"
               dataKey={`d${driverNum}`}
               name={driver?.name_acronym ?? String(driverNum)}
-              stroke={driver ? getTeamColor(driver.team_colour) : "#888"}
+              stroke={driver ? getTeamColor(driver.team_colour, driver.team_name) : "#888"}
               strokeWidth={2}
               dot={false}
               connectNulls={false}

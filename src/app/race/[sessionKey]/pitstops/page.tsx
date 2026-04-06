@@ -121,7 +121,7 @@ export default function PitStopsPage({
                             className="h-5 w-1 rounded-full"
                             style={{
                               backgroundColor: driver
-                                ? getTeamColor(driver.team_colour)
+                                ? getTeamColor(driver.team_colour, driver.team_name)
                                 : "#888",
                             }}
                           />
