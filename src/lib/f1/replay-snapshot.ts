@@ -161,6 +161,7 @@ export function buildReplaySnapshot(
   let trackPath = "";
   let sfLine: ReplaySnapshot["sfLine"];
   let sectorTicks: ReplaySnapshot["sectorTicks"];
+  let sectorPaths: ReplaySnapshot["sectorPaths"];
 
   if (rotatedCircuit && rotatedCircuit.length > 1) {
     const projected = rotatedCircuit.map((p) => project(p.x, p.y));
@@ -230,6 +231,27 @@ export function buildReplaySnapshot(
       const s1EndIdx = indexAtDist(sfDist + ratios.s1End * totalLen);
       const s2EndIdx = indexAtDist(sfDist + ratios.s2End * totalLen);
       sectorTicks = [tickAt(s1EndIdx, 1.0), tickAt(s2EndIdx, 1.0)];
+
+      // Build separate SVG paths for each timing sector so the map can
+      // color individual sectors for yellow flags, VSC, etc.
+      const buildSectorPath = (startIdx: number, endIdx: number): string => {
+        const pts: string[] = [];
+        let i = startIdx;
+        while (true) {
+          const p = projected[i % nPoints];
+          pts.push(
+            `${pts.length === 0 ? "M" : "L"} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`
+          );
+          if (i % nPoints === endIdx % nPoints) break;
+          i++;
+        }
+        return pts.join(" ");
+      };
+      sectorPaths = [
+        buildSectorPath(sfIdx, s1EndIdx),
+        buildSectorPath(s1EndIdx, s2EndIdx),
+        buildSectorPath(s2EndIdx, sfIdx),
+      ];
     }
   }
 
@@ -239,6 +261,7 @@ export function buildReplaySnapshot(
     trackPath,
     sfLine,
     sectorTicks,
+    sectorPaths,
     viewBox: "0 0 100 100",
     drivers,
   };

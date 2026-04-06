@@ -4,6 +4,13 @@ import { memo } from "react";
 import type { Driver } from "@/lib/openf1/types";
 import { getTeamColor } from "@/lib/utils/colors";
 
+const FLAG_COLORS: Record<string, string> = {
+  yellow: "#FACC15",
+  vsc: "#FACC15",
+  sc: "#FACC15",
+  red: "#EF4444",
+};
+
 interface ReplayMapProps {
   trackPath: string;
   viewBox: string;
@@ -11,6 +18,8 @@ interface ReplayMapProps {
   drivers: Driver[];
   sfLine?: { x1: number; y1: number; x2: number; y2: number };
   sectorTicks?: Array<{ x1: number; y1: number; x2: number; y2: number }>;
+  sectorPaths?: [string, string, string];
+  trackFlagStatus?: [string | null, string | null, string | null];
   driverLapStatus?: Map<number, "leader" | "lapped" | "retired" | null>;
 }
 
@@ -21,9 +30,12 @@ export const ReplayMap = memo(function ReplayMap({
   drivers,
   sfLine,
   sectorTicks,
+  sectorPaths,
+  trackFlagStatus,
   driverLapStatus,
 }: ReplayMapProps) {
   const driverMap = new Map(drivers.map((d) => [d.driver_number, d]));
+  const hasActiveFlag = trackFlagStatus?.some((f) => f !== null) ?? false;
 
   return (
     <div className="relative w-full rounded-lg border border-f1-border bg-f1-surface p-4">
@@ -33,7 +45,7 @@ export const ReplayMap = memo(function ReplayMap({
         style={{ aspectRatio: "1 / 1", maxHeight: "calc(100vh - 300px)" }}
         preserveAspectRatio="xMidYMid meet"
       >
-        {/* Track outline */}
+        {/* Track outline — dimmed when sector paths are showing flags */}
         {trackPath && (
           <path
             d={trackPath}
@@ -44,6 +56,26 @@ export const ReplayMap = memo(function ReplayMap({
             strokeLinecap="round"
           />
         )}
+
+        {/* Sector-colored overlays when flags are active */}
+        {hasActiveFlag && sectorPaths?.map((path, si) => {
+          const flag = trackFlagStatus?.[si];
+          if (!flag) return null;
+          const color = FLAG_COLORS[flag];
+          if (!color) return null;
+          return (
+            <path
+              key={`sector-flag-${si}`}
+              d={path}
+              fill="none"
+              stroke={color}
+              strokeWidth="1.2"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              opacity={0.8}
+            />
+          );
+        })}
 
         {/* Sector boundary ticks (short, subdued) */}
         {sectorTicks?.map((tick, i) => (

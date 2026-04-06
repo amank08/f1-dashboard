@@ -82,6 +82,57 @@ export function SessionReplay({
     return status;
   }, [timingEntries, retiredDrivers]);
 
+  // Compute active flag status per sector from race control messages.
+  // Race control uses ~20 mini-sectors; we map them to 3 timing sectors.
+  // "Track" scope or VSC/SC messages affect all sectors.
+  const trackFlagStatus = useMemo(() => {
+    // null = green, "yellow" = yellow/double yellow in a sector, "sc" = safety car, "vsc" = virtual SC, "red" = red flag
+    const status: [string | null, string | null, string | null] = [null, null, null];
+    const cutoff = new Date(replay.currentTime).toISOString();
+
+    // Track the latest flag per mini-sector and track-wide
+    let trackFlag: string | null = null;
+
+    for (const msg of raceControl) {
+      if (msg.date > cutoff) continue;
+      if (!msg.flag && !msg.message) continue;
+
+      const msgUpper = msg.message.toUpperCase();
+
+      // Track-wide flags
+      if (msg.scope === "Track" || msg.scope === null) {
+        if (msgUpper.includes("VIRTUAL SAFETY CAR DEPLOYED") || msgUpper.includes("VIRTUAL SAFETY CAR")) {
+          trackFlag = "vsc";
+        } else if (msgUpper.includes("SAFETY CAR DEPLOYED") || msgUpper.includes("SAFETY CAR IN THIS LAP")) {
+          trackFlag = "sc";
+        } else if (msg.flag === "RED") {
+          trackFlag = "red";
+        } else if (msg.flag === "GREEN" || msg.flag === "CLEAR" || msgUpper.includes("GREEN LIGHT")) {
+          trackFlag = null;
+        }
+      }
+
+      // Sector-scoped yellow flags: map mini-sectors to timing sectors
+      // Mini-sectors 1-8 → S1, 9-16 → S2, 17-24 → S3 (approximate)
+      if (msg.scope === "Sector" && msg.sector != null) {
+        const timingSector =
+          msg.sector <= 8 ? 0 : msg.sector <= 16 ? 1 : 2;
+        if (msg.flag === "YELLOW" || msg.flag === "DOUBLE YELLOW") {
+          status[timingSector] = "yellow";
+        } else if (msg.flag === "GREEN" || msg.flag === "CLEAR") {
+          status[timingSector] = null;
+        }
+      }
+    }
+
+    // Track-wide flags override individual sectors
+    if (trackFlag) {
+      return [trackFlag, trackFlag, trackFlag] as [string | null, string | null, string | null];
+    }
+
+    return status;
+  }, [raceControl, replay.currentTime]);
+
   // Phase-based status for Practice/Qualifying
   const phases = useMemo(
     () => buildSessionPhases(raceControl, sessionType),
@@ -167,6 +218,8 @@ export function SessionReplay({
         drivers={drivers}
         sfLine={snapshot.sfLine}
         sectorTicks={snapshot.sectorTicks}
+        sectorPaths={snapshot.sectorPaths}
+        trackFlagStatus={trackFlagStatus}
         driverLapStatus={driverLapStatus}
       />
       <ReplayControls

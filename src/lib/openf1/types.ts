@@ -181,6 +181,8 @@ export interface ReplaySnapshot {
    * Omitted when legacy sector data isn't available for the circuit.
    */
   sectorTicks?: Array<{ x1: number; y1: number; x2: number; y2: number }>;
+  /** SVG paths for each of the 3 timing sectors (S1, S2, S3). */
+  sectorPaths?: [string, string, string];
   /** Always `"0 0 100 100"` — coordinates are pre-normalized. */
   viewBox: string;
   /** Keyed by driver_number as a string (JSON-friendly). */

@@ -93,8 +93,8 @@ export async function GET(request: NextRequest) {
   // Key is versioned ("snap") — the old `f1replaypos_session=` entries
   // held raw LocationSample[] which are now too large to ship to the
   // browser; ignore them and build the compact snapshot fresh.
-  // "mv3" drops per-sector colored paths in favor of sector boundary ticks.
-  const cacheKey = `f1replaysnapmv3_session=${sessionKey}`;
+  // "mv4" adds sectorPaths for flag-colored track overlays.
+  const cacheKey = `f1replaysnapmv4_session=${sessionKey}`;
   const cached = diskCacheGet(cacheKey) as ReplaySnapshot | undefined;
   if (cached) {
     return NextResponse.json(cached, { headers: { "X-Cache": "DISK" } });
