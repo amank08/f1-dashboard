@@ -236,14 +236,15 @@ export function buildReplaySnapshot(
       // color individual sectors for yellow flags, VSC, etc.
       const buildSectorPath = (startIdx: number, endIdx: number): string => {
         const pts: string[] = [];
-        let i = startIdx;
-        while (true) {
-          const p = projected[i % nPoints];
+        const start = ((startIdx % nPoints) + nPoints) % nPoints;
+        const end = ((endIdx % nPoints) + nPoints) % nPoints;
+        const count = start <= end ? end - start + 1 : nPoints - start + end + 1;
+        for (let j = 0; j < count; j++) {
+          const idx = (start + j) % nPoints;
+          const p = projected[idx];
           pts.push(
-            `${pts.length === 0 ? "M" : "L"} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`
+            `${j === 0 ? "M" : "L"} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`
           );
-          if (i % nPoints === endIdx % nPoints) break;
-          i++;
         }
         return pts.join(" ");
       };

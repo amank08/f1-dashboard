@@ -83,40 +83,57 @@ export function SessionReplay({
   }, [timingEntries, retiredDrivers]);
 
   // Compute active flag status per sector from race control messages.
-  // Race control uses ~20 mini-sectors; we map them to 3 timing sectors.
-  // "Track" scope or VSC/SC messages affect all sectors.
+  // Race control uses mini-sectors (varies per circuit); we map to 3 timing
+  // sectors using thirds of the max mini-sector number seen.
   const trackFlagStatus = useMemo(() => {
-    // null = green, "yellow" = yellow/double yellow in a sector, "sc" = safety car, "vsc" = virtual SC, "red" = red flag
     const status: [string | null, string | null, string | null] = [null, null, null];
     const cutoff = new Date(replay.currentTime).toISOString();
 
-    // Track the latest flag per mini-sector and track-wide
+    // Find max mini-sector number to compute thirds
+    let maxMiniSector = 0;
+    for (const msg of raceControl) {
+      if (msg.scope === "Sector" && msg.sector != null && msg.sector > maxMiniSector) {
+        maxMiniSector = msg.sector;
+      }
+    }
+    const s1Boundary = Math.ceil(maxMiniSector / 3);
+    const s2Boundary = Math.ceil((maxMiniSector * 2) / 3);
+
     let trackFlag: string | null = null;
 
     for (const msg of raceControl) {
       if (msg.date > cutoff) continue;
-      if (!msg.flag && !msg.message) continue;
 
-      const msgUpper = msg.message.toUpperCase();
+      const msgUpper = (msg.message ?? "").toUpperCase();
 
-      // Track-wide flags
-      if (msg.scope === "Track" || msg.scope === null) {
-        if (msgUpper.includes("VIRTUAL SAFETY CAR DEPLOYED") || msgUpper.includes("VIRTUAL SAFETY CAR")) {
+      // SafetyCar category is the most reliable signal
+      if (msg.category === "SafetyCar") {
+        if (msgUpper.includes("VSC DEPLOYED")) {
           trackFlag = "vsc";
-        } else if (msgUpper.includes("SAFETY CAR DEPLOYED") || msgUpper.includes("SAFETY CAR IN THIS LAP")) {
-          trackFlag = "sc";
-        } else if (msg.flag === "RED") {
-          trackFlag = "red";
-        } else if (msg.flag === "GREEN" || msg.flag === "CLEAR" || msgUpper.includes("GREEN LIGHT")) {
+        } else if (msgUpper.includes("VSC ENDING")) {
           trackFlag = null;
+        } else if (msgUpper.includes("SAFETY CAR DEPLOYED")) {
+          trackFlag = "sc";
+        } else if (msgUpper.includes("SAFETY CAR IN THIS LAP")) {
+          trackFlag = null; // SC ending
         }
+        continue;
       }
 
-      // Sector-scoped yellow flags: map mini-sectors to timing sectors
-      // Mini-sectors 1-8 → S1, 9-16 → S2, 17-24 → S3 (approximate)
-      if (msg.scope === "Sector" && msg.sector != null) {
+      // Track-wide flags
+      if (msg.scope === "Track") {
+        if (msg.flag === "RED") {
+          trackFlag = "red";
+        } else if (msg.flag === "GREEN") {
+          trackFlag = null;
+        }
+        continue;
+      }
+
+      // Sector-scoped yellow flags
+      if (msg.scope === "Sector" && msg.sector != null && maxMiniSector > 0) {
         const timingSector =
-          msg.sector <= 8 ? 0 : msg.sector <= 16 ? 1 : 2;
+          msg.sector <= s1Boundary ? 0 : msg.sector <= s2Boundary ? 1 : 2;
         if (msg.flag === "YELLOW" || msg.flag === "DOUBLE YELLOW") {
           status[timingSector] = "yellow";
         } else if (msg.flag === "GREEN" || msg.flag === "CLEAR") {
