@@ -316,6 +316,23 @@ export default function SessionAnalysisPage() {
     );
   }, [replayTime, drivers, positions, intervals, stints, laps]);
 
+  // Detect retired drivers from timing entries (same as circuit map)
+  const retiredDrivers = useMemo(() => {
+    const set = new Set<number>();
+    if (!replayTimingEntries || replayTimingEntries.length === 0) return set;
+    const leaderEntry = replayTimingEntries.find((e) => e.position === 1);
+    const leaderLap = leaderEntry?.currentLap ?? 0;
+    const dnfThreshold = Math.floor(leaderLap * 0.9);
+    if (leaderLap > 2) {
+      for (const e of replayTimingEntries) {
+        if (e.position !== 1 && e.currentLap < dnfThreshold) {
+          set.add(e.driverNumber);
+        }
+      }
+    }
+    return set;
+  }, [replayTimingEntries]);
+
   const replayRaceControl = useMemo(() => {
     if (!replayTime || !raceControl) return raceControl ?? [];
     const cutoff = new Date(replayTime).toISOString();
@@ -703,6 +720,7 @@ export default function SessionAnalysisPage() {
                   raceControl={raceControl ?? []}
                   onTimeChange={handleReplayTimeChange}
                   timingEntries={replayTimingEntries}
+                  retiredDrivers={retiredDrivers}
                 />
               ) : (
                 <div className="space-y-4">
@@ -729,7 +747,7 @@ export default function SessionAnalysisPage() {
               ))}
             </div>
           ) : (
-            <TimingBoard entries={replayTimingEntries} />
+            <TimingBoard entries={replayTimingEntries} retiredDrivers={retiredDrivers} />
           )}
         </div>
       )}

@@ -312,7 +312,7 @@ function MiniSectors({ segments }: { segments: (number | null)[][] }) {
   );
 }
 
-export function TimingBoard({ entries }: { entries: TimingEntry[] }) {
+export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[]; retiredDrivers?: Set<number> }) {
   if (entries.length === 0) {
     return (
       <div className="rounded-lg border border-f1-border bg-f1-surface p-8 text-center text-f1-text-muted">
@@ -357,14 +357,22 @@ export function TimingBoard({ entries }: { entries: TimingEntry[] }) {
             const [s1, s2, s3] = entry.sectorTimes;
             const pb = entry.personalBestSectors;
             const ob = overallBestSectors;
+            const isOut = retiredDrivers?.has(entry.driverNumber) ?? false;
 
             return (
               <tr
                 key={entry.driverNumber}
-                className="border-b border-f1-border/50 transition-colors hover:bg-f1-card/50"
+                className={cn(
+                  "border-b border-f1-border/50 transition-colors hover:bg-f1-card/50",
+                  isOut && "opacity-40"
+                )}
               >
                 <td className="px-2 py-2 text-center font-bold">
-                  {entry.position}
+                  {isOut ? (
+                    <span className="text-red-400">OUT</span>
+                  ) : (
+                    entry.position
+                  )}
                 </td>
                 <td className="px-2 py-2">
                   <div className="flex items-center gap-2">

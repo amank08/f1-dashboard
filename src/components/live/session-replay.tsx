@@ -24,6 +24,7 @@ interface SessionReplayProps {
   raceControl: RaceControlMessage[];
   onTimeChange?: (time: number) => void;
   timingEntries?: TimingEntry[];
+  retiredDrivers?: Set<number>;
 }
 
 const LAP_SESSION_TYPES = new Set(["Race", "Sprint"]);
@@ -36,6 +37,7 @@ export function SessionReplay({
   raceControl,
   onTimeChange,
   timingEntries,
+  retiredDrivers,
 }: SessionReplayProps) {
   const useLapSkips = LAP_SESSION_TYPES.has(sessionType);
 
@@ -63,18 +65,11 @@ export function SessionReplay({
     const status = new Map<number, "leader" | "lapped" | "retired" | null>();
     if (!timingEntries || timingEntries.length === 0) return status;
 
-    // Find the leader's lap count
-    const leaderEntry = timingEntries.find((e) => e.position === 1);
-    const leaderLap = leaderEntry?.currentLap ?? 0;
-    // DNF threshold: completed less than 90% of leader's laps
-    const dnfThreshold = Math.floor(leaderLap * 0.9);
-
     for (const e of timingEntries) {
-      if (e.position === 1) {
-        status.set(e.driverNumber, "leader");
-      } else if (leaderLap > 3 && e.currentLap < dnfThreshold) {
-        // Only apply DNF detection after a few laps to avoid false positives
+      if (retiredDrivers?.has(e.driverNumber)) {
         status.set(e.driverNumber, "retired");
+      } else if (e.position === 1) {
+        status.set(e.driverNumber, "leader");
       } else if (
         typeof e.gapToLeader === "string" &&
         /LAP/i.test(e.gapToLeader)
@@ -85,7 +80,7 @@ export function SessionReplay({
       }
     }
     return status;
-  }, [timingEntries]);
+  }, [timingEntries, retiredDrivers]);
 
   // Phase-based status for Practice/Qualifying
   const phases = useMemo(
