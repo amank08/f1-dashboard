@@ -11,7 +11,10 @@
  * This job is deliberately offline — no HTTP. Fetching missing years from
  * OpenF1 is a separate job to be added later (keeps ingest sources pure).
  */
-import type { DuckDBConnection } from "@duckdb/node-api";
+import {
+  DuckDBTimestampMicrosecondsValue,
+  type DuckDBConnection,
+} from "@duckdb/node-api";
 import { getDb, recordRun } from "./db";
 import { readCacheEntries } from "./disk-cache-reader";
 import type { Session } from "../../src/lib/openf1/types";
@@ -157,5 +160,5 @@ function bindNullableTimestamp(
   if (!value) return stmt.bindNull(idx);
   const ms = Date.parse(value);
   if (!Number.isFinite(ms)) return stmt.bindNull(idx);
-  stmt.bindTimestamp(idx, { micros: BigInt(ms) * 1000n });
+  stmt.bindTimestamp(idx, new DuckDBTimestampMicrosecondsValue(BigInt(ms) * 1000n));
 }

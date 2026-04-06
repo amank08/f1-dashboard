@@ -5,7 +5,10 @@
  * `ingest-sessions.ts`, this is offline: upserts whatever the cache
  * already holds. Fetching missing sessions is a separate concern.
  */
-import type { DuckDBConnection } from "@duckdb/node-api";
+import {
+  DuckDBTimestampMicrosecondsValue,
+  type DuckDBConnection,
+} from "@duckdb/node-api";
 import { getDb, recordRun } from "./db";
 import { readCacheEntries } from "./disk-cache-reader";
 import type { LapData } from "../../src/lib/openf1/types";
@@ -88,7 +91,7 @@ async function upsertLap(
   if (lap.date_start) {
     const ms = Date.parse(lap.date_start);
     if (Number.isFinite(ms)) {
-      prepared.bindTimestamp(4, { micros: BigInt(ms) * 1000n });
+      prepared.bindTimestamp(4, new DuckDBTimestampMicrosecondsValue(BigInt(ms) * 1000n));
     } else {
       prepared.bindNull(4);
     }

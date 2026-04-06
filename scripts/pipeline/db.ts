@@ -17,7 +17,11 @@
  */
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { DuckDBInstance, type DuckDBConnection } from "@duckdb/node-api";
+import {
+  DuckDBInstance,
+  DuckDBTimestampMicrosecondsValue,
+  type DuckDBConnection,
+} from "@duckdb/node-api";
 
 export const DB_PATH = join(process.cwd(), "data", "f1.duckdb");
 
@@ -118,7 +122,10 @@ export async function recordRun(
   prepared.bindVarchar(1, params.jobName);
   prepared.bindVarchar(2, params.targetKey);
   prepared.bindVarchar(3, params.status);
-  prepared.bindTimestamp(4, { micros: BigInt(params.startedAt.getTime()) * 1000n });
+  prepared.bindTimestamp(
+    4,
+    new DuckDBTimestampMicrosecondsValue(BigInt(params.startedAt.getTime()) * 1000n)
+  );
   if (params.rowCount != null) prepared.bindInteger(5, params.rowCount);
   else prepared.bindNull(5);
   if (params.error != null) prepared.bindVarchar(6, params.error);
