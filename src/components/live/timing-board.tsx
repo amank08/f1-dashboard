@@ -110,8 +110,11 @@ export function buildTimingData(
   {
     const freq: [Map<number, number>, Map<number, number>, Map<number, number>] = [new Map(), new Map(), new Map()];
     for (const l of (allLaps ?? laps)) {
+      // Strip S1 leading null (OpenF1 detection point) before counting
+      const rawS1Len = l.segments_sector_1?.length ?? 0;
+      const s1HasLeadingNull = rawS1Len > 0 && l.segments_sector_1?.[0] === null;
       const lens = [
-        l.segments_sector_1?.length ?? 0,
+        s1HasLeadingNull ? rawS1Len - 1 : rawS1Len,
         l.segments_sector_2?.length ?? 0,
         l.segments_sector_3?.length ?? 0,
       ];
@@ -144,8 +147,12 @@ export function buildTimingData(
 
     // Track latest sector times and segments (last lap in array)
     latestSectors.set(dn, [l.duration_sector_1, l.duration_sector_2, l.duration_sector_3]);
+    // Strip the leading null that OpenF1 includes in S1 for the detection
+    // point — it doesn't represent a real mini-sector.
+    const rawS1 = l.segments_sector_1 ?? [];
+    const s1 = rawS1.length > 0 && rawS1[0] === null ? rawS1.slice(1) : rawS1;
     latestSegments.set(dn, [
-      l.segments_sector_1 ?? [],
+      s1,
       l.segments_sector_2 ?? [],
       l.segments_sector_3 ?? [],
     ]);
@@ -274,14 +281,9 @@ function MiniSectors({ segments }: { segments: (number | null)[][] }) {
 
   return (
     <div className="flex gap-px">
-      {segments.map((sector, si) => {
-        // Drop the leading null that OpenF1 returns for the S1 detection point
-        const trimmed = sector.length > 0 && sector[0] === null
-          ? sector.slice(1)
-          : sector;
-        return (
+      {segments.map((sector, si) => (
           <div key={si} className={cn("flex gap-px", si > 0 && "ml-1")}>
-            {trimmed.map((seg, mi) => (
+            {sector.map((seg, mi) => (
               <div
                 key={`${si}-${mi}`}
                 className="h-3 w-1.5 rounded-[1px]"
@@ -289,8 +291,7 @@ function MiniSectors({ segments }: { segments: (number | null)[][] }) {
               />
             ))}
           </div>
-        );
-      })}
+      ))}
     </div>
   );
 }
