@@ -58,13 +58,23 @@ export function SessionReplay({
     [replay.currentTime, laps]
   );
 
-  // Derive leader / lapped / retired status from timing board + position data
+  // Derive leader / lapped / retired status from timing board entries
   const driverLapStatus = useMemo(() => {
     const status = new Map<number, "leader" | "lapped" | "retired" | null>();
-    if (!timingEntries) return status;
+    if (!timingEntries || timingEntries.length === 0) return status;
+
+    // Find the leader's lap count
+    const leaderEntry = timingEntries.find((e) => e.position === 1);
+    const leaderLap = leaderEntry?.currentLap ?? 0;
+    // DNF threshold: completed less than 90% of leader's laps
+    const dnfThreshold = Math.floor(leaderLap * 0.9);
+
     for (const e of timingEntries) {
       if (e.position === 1) {
         status.set(e.driverNumber, "leader");
+      } else if (leaderLap > 3 && e.currentLap < dnfThreshold) {
+        // Only apply DNF detection after a few laps to avoid false positives
+        status.set(e.driverNumber, "retired");
       } else if (
         typeof e.gapToLeader === "string" &&
         /LAP/i.test(e.gapToLeader)
@@ -74,23 +84,8 @@ export function SessionReplay({
         status.set(e.driverNumber, null);
       }
     }
-    // Detect retirements: if a driver's last position timestamp is >60s
-    // behind the current replay time, they've stopped transmitting → retired
-    if (snapshot) {
-      const now = replay.currentTime;
-      for (const [numStr, track] of Object.entries(snapshot.drivers)) {
-        const driverNum = Number(numStr);
-        if (track.t.length === 0) continue;
-        const lastT = track.t[track.t.length - 1];
-        // Only flag as retired if we're well past their last data point
-        // and the session is still running (not near the end)
-        if (now - lastT > 60_000 && now < snapshot.maxTime - 30_000) {
-          status.set(driverNum, "retired");
-        }
-      }
-    }
     return status;
-  }, [timingEntries, snapshot, replay.currentTime]);
+  }, [timingEntries]);
 
   // Phase-based status for Practice/Qualifying
   const phases = useMemo(

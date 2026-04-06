@@ -58,6 +58,7 @@ export interface TimingEntry {
   sectorTimes: [number | null, number | null, number | null];
   segments: (number | null)[][];
   personalBestSectors: SectorBests;
+  currentLap: number;
 }
 
 export function buildTimingData(
@@ -98,6 +99,7 @@ export function buildTimingData(
   // Get last lap, best lap, latest sectors, segments, and personal best sectors per driver
   const lastLap = new Map<number, number>();
   const bestLap = new Map<number, number>();
+  const latestLapNum = new Map<number, number>();
   const latestSectors = new Map<number, [number | null, number | null, number | null]>();
   const prevLapSectors = new Map<number, [number | null, number | null, number | null]>();
   const latestSegments = new Map<number, (number | null)[][]>();
@@ -138,6 +140,8 @@ export function buildTimingData(
 
   for (const l of laps) {
     const dn = l.driver_number;
+    const prevLap = latestLapNum.get(dn) ?? 0;
+    if (l.lap_number > prevLap) latestLapNum.set(dn, l.lap_number);
 
     // Track personal best sectors
     const pb = personalBestSectors.get(dn) ?? { s1: null, s2: null, s3: null };
@@ -280,6 +284,7 @@ export function buildTimingData(
       sectorTimes: latestSectors.get(driverNum) ?? [null, null, null],
       segments: latestSegments.get(driverNum) ?? [[], [], []],
       personalBestSectors: personalBestSectors.get(driverNum) ?? { s1: null, s2: null, s3: null },
+      currentLap: latestLapNum.get(driverNum) ?? 0,
     });
   }
 
