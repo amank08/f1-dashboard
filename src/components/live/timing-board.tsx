@@ -99,6 +99,7 @@ export function buildTimingData(
   const lastLap = new Map<number, number>();
   const bestLap = new Map<number, number>();
   const latestSectors = new Map<number, [number | null, number | null, number | null]>();
+  const prevLapSectors = new Map<number, [number | null, number | null, number | null]>();
   const latestSegments = new Map<number, (number | null)[][]>();
   const personalBestSectors = new Map<number, SectorBests>();
   // Mini-sector count per sector is a fixed property of the circuit.
@@ -145,6 +146,9 @@ export function buildTimingData(
     if (l.duration_sector_3 !== null && (pb.s3 === null || l.duration_sector_3 < pb.s3)) pb.s3 = l.duration_sector_3;
     personalBestSectors.set(dn, pb);
 
+    // Save current as previous before overwriting (for sector time carry-over)
+    const prev = latestSectors.get(dn);
+    if (prev) prevLapSectors.set(dn, prev);
     // Track latest sector times and segments (last lap in array)
     latestSectors.set(dn, [l.duration_sector_1, l.duration_sector_2, l.duration_sector_3]);
     // Strip the leading null that OpenF1 includes in S1 for the detection
@@ -223,7 +227,9 @@ export function buildTimingData(
   }
 
   // Time-based masking for sector duration columns (S1/S2/S3)
-  // Null-out sector times for sectors the driver hasn't completed yet
+  // F1-style: each sector time persists until a new one replaces it.
+  // When a driver starts a new lap and is in S1, S2/S3 from the previous
+  // lap remain visible. S1 resets only when the driver completes S1.
   if (replayTimestamp != null) {
     for (const [dn, sectors] of latestSectors) {
       const meta = latestLapMeta.get(dn);
@@ -231,18 +237,19 @@ export function buildTimingData(
 
       const lapStart = new Date(meta.dateStart).getTime();
       const elapsed = (replayTimestamp - lapStart) / 1000;
+      const prev = prevLapSectors.get(dn);
 
       const [d1, d2, d3] = meta.durations;
       const s1End = d1 ?? Infinity;
       const s2End = s1End + (d2 ?? Infinity);
       const s3End = s2End + (d3 ?? Infinity);
 
-      // S1: show only if elapsed >= s1End (sector 1 fully completed)
-      if (elapsed < s1End) sectors[0] = null;
-      // S2: show only if elapsed >= s2End (sector 2 fully completed)
-      if (elapsed < s2End) sectors[1] = null;
-      // S3: show only if elapsed >= s3End (sector 3 fully completed)
-      if (elapsed < s3End) sectors[2] = null;
+      // S1: if not yet completed, carry over previous lap's S1
+      if (elapsed < s1End) sectors[0] = prev?.[0] ?? null;
+      // S2: if not yet completed, carry over previous lap's S2
+      if (elapsed < s2End) sectors[1] = prev?.[1] ?? null;
+      // S3: if not yet completed, carry over previous lap's S3
+      if (elapsed < s3End) sectors[2] = prev?.[2] ?? null;
     }
   }
 
