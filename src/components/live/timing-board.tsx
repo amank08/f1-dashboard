@@ -66,7 +66,11 @@ export function buildTimingData(
   intervals: Interval[],
   stints: Stint[],
   laps: LapData[],
-  replayTimestamp?: number | null
+  replayTimestamp?: number | null,
+  /** Full unfiltered laps — used to compute a stable mini-sector grid
+   *  layout that doesn't shift as the replay progresses. Only needed
+   *  when `laps` is a time-filtered subset. */
+  allLaps?: LapData[]
 ): TimingEntry[] {
   // Get latest position per driver
   const latestPos = new Map<number, number>();
@@ -97,8 +101,22 @@ export function buildTimingData(
   const latestSectors = new Map<number, [number | null, number | null, number | null]>();
   const latestSegments = new Map<number, (number | null)[][]>();
   const personalBestSectors = new Map<number, SectorBests>();
-  // Track the expected mini-sector count per sector (max seen across all laps)
+  // Compute expected mini-sector count per sector from ALL session laps
+  // (not just the time-filtered subset). This keeps the grid layout
+  // stable during replay — no +1 box appearing as new laps enter scope.
   const sectorCounts = new Map<number, [number, number, number]>();
+  for (const l of (allLaps ?? laps)) {
+    const dn = l.driver_number;
+    const s1len = l.segments_sector_1?.length ?? 0;
+    const s2len = l.segments_sector_2?.length ?? 0;
+    const s3len = l.segments_sector_3?.length ?? 0;
+    const prev = sectorCounts.get(dn) ?? [0, 0, 0];
+    if (s1len > prev[0]) prev[0] = s1len;
+    if (s2len > prev[1]) prev[1] = s2len;
+    if (s3len > prev[2]) prev[2] = s3len;
+    sectorCounts.set(dn, prev);
+  }
+
   // Track latest lap metadata for time-based masking
   const latestLapMeta = new Map<number, { dateStart: string; durations: [number | null, number | null, number | null] }>();
 
@@ -111,16 +129,6 @@ export function buildTimingData(
     if (l.duration_sector_2 !== null && (pb.s2 === null || l.duration_sector_2 < pb.s2)) pb.s2 = l.duration_sector_2;
     if (l.duration_sector_3 !== null && (pb.s3 === null || l.duration_sector_3 < pb.s3)) pb.s3 = l.duration_sector_3;
     personalBestSectors.set(dn, pb);
-
-    // Remember mini-sector counts from any completed sector
-    const s1len = l.segments_sector_1?.length ?? 0;
-    const s2len = l.segments_sector_2?.length ?? 0;
-    const s3len = l.segments_sector_3?.length ?? 0;
-    const prev = sectorCounts.get(dn) ?? [0, 0, 0];
-    if (s1len > prev[0]) prev[0] = s1len;
-    if (s2len > prev[1]) prev[1] = s2len;
-    if (s3len > prev[2]) prev[2] = s3len;
-    sectorCounts.set(dn, prev);
 
     // Track latest sector times and segments (last lap in array)
     latestSectors.set(dn, [l.duration_sector_1, l.duration_sector_2, l.duration_sector_3]);

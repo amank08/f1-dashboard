@@ -311,7 +311,8 @@ export default function SessionAnalysisPage() {
       filteredIntervals,
       filteredStints,
       filteredLaps,
-      replayTime
+      replayTime,
+      laps // full unfiltered laps for stable mini-sector grid layout
     );
   }, [replayTime, drivers, positions, intervals, stints, laps]);
 
