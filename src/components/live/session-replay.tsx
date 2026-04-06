@@ -55,6 +55,31 @@ export function SessionReplay({
     [replay.currentTime, laps]
   );
 
+  // Compute leader / lapped status for map styling
+  const driverLapStatus = useMemo(() => {
+    const cutoff = replay.currentTime;
+    const lapByDriver = new Map<number, number>();
+    for (const l of laps) {
+      const t = new Date(l.date_start).getTime();
+      if (t <= cutoff) {
+        const cur = lapByDriver.get(l.driver_number) ?? 0;
+        if (l.lap_number > cur) lapByDriver.set(l.driver_number, l.lap_number);
+      }
+    }
+    let leaderLap = 0;
+    let leaderDriver: number | null = null;
+    for (const [dn, lap] of lapByDriver) {
+      if (lap > leaderLap) { leaderLap = lap; leaderDriver = dn; }
+    }
+    const status = new Map<number, "leader" | "lapped" | null>();
+    for (const [dn, lap] of lapByDriver) {
+      if (dn === leaderDriver) status.set(dn, "leader");
+      else if (lap < leaderLap) status.set(dn, "lapped");
+      else status.set(dn, null);
+    }
+    return status;
+  }, [replay.currentTime, laps]);
+
   // Phase-based status for Practice/Qualifying
   const phases = useMemo(
     () => buildSessionPhases(raceControl, sessionType),
@@ -140,6 +165,7 @@ export function SessionReplay({
         drivers={drivers}
         sfLine={snapshot.sfLine}
         sectorTicks={snapshot.sectorTicks}
+        driverLapStatus={driverLapStatus}
       />
       <ReplayControls
         currentTime={replay.currentTime}

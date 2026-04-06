@@ -11,6 +11,7 @@ interface ReplayMapProps {
   drivers: Driver[];
   sfLine?: { x1: number; y1: number; x2: number; y2: number };
   sectorTicks?: Array<{ x1: number; y1: number; x2: number; y2: number }>;
+  driverLapStatus?: Map<number, "leader" | "lapped" | null>;
 }
 
 export const ReplayMap = memo(function ReplayMap({
@@ -20,6 +21,7 @@ export const ReplayMap = memo(function ReplayMap({
   drivers,
   sfLine,
   sectorTicks,
+  driverLapStatus,
 }: ReplayMapProps) {
   const driverMap = new Map(drivers.map((d) => [d.driver_number, d]));
 
@@ -75,6 +77,9 @@ export const ReplayMap = memo(function ReplayMap({
           const driver = driverMap.get(driverNum);
           if (!driver) return null;
           const color = getTeamColor(driver.team_colour, driver.team_name);
+          const status = driverLapStatus?.get(driverNum);
+          const textColor =
+            status === "leader" ? "#FFD700" : status === "lapped" ? "#7DD3FC" : "#fff";
 
           return (
             <g key={driverNum}>
@@ -89,7 +94,7 @@ export const ReplayMap = memo(function ReplayMap({
               <text
                 x={pos.x + 1.8}
                 y={pos.y + 0.5}
-                fill="#fff"
+                fill={textColor}
                 fontSize="2"
                 fontWeight="600"
                 fontFamily="inherit"
