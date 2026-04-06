@@ -335,35 +335,21 @@ export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[
 
   return (
     <div className="overflow-x-auto rounded-lg border border-f1-border">
-      <table className="w-full text-sm table-fixed">
-        <colgroup>
-          <col className="w-10" />        {/* Pos */}
-          <col className="w-24" />        {/* Driver */}
-          <col className="w-[72px]" />    {/* Int */}
-          <col className="w-[72px]" />    {/* Gap */}
-          <col className="w-[64px]" />    {/* S1 */}
-          <col className="w-[64px]" />    {/* S2 */}
-          <col className="w-[64px]" />    {/* S3 */}
-          <col />                         {/* Mini Sectors - flex fill */}
-          <col className="w-[72px]" />    {/* Last */}
-          <col className="w-[72px]" />    {/* Best */}
-          <col className="w-10" />        {/* Tire */}
-          <col className="w-10" />        {/* Pit */}
-        </colgroup>
+      <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-f1-border bg-f1-surface text-xs font-semibold uppercase text-f1-text-muted">
-            <th className="px-2 py-2.5 text-center">Pos</th>
-            <th className="px-2 py-2.5 text-left">Driver</th>
-            <th className="px-2 py-2.5 text-right">Int</th>
-            <th className="px-2 py-2.5 text-right">Gap</th>
-            <th className="px-2 py-2.5 text-right">S1</th>
-            <th className="px-2 py-2.5 text-right">S2</th>
-            <th className="px-2 py-2.5 text-right">S3</th>
-            <th className="px-2 py-2.5 text-center">Mini Sectors</th>
-            <th className="px-2 py-2.5 text-right">Last</th>
-            <th className="px-2 py-2.5 text-right">Best</th>
-            <th className="px-2 py-2.5 text-center">Tire</th>
-            <th className="px-2 py-2.5 text-center">Pit</th>
+            <th className="px-2 py-2.5 text-center w-10">Pos</th>
+            <th className="px-2 py-2.5 text-left whitespace-nowrap">Driver</th>
+            <th className="px-2 py-2.5 text-right whitespace-nowrap">Int</th>
+            <th className="px-2 py-2.5 text-right whitespace-nowrap">Gap</th>
+            <th className="px-2 py-2.5 text-right whitespace-nowrap">S1</th>
+            <th className="px-2 py-2.5 text-right whitespace-nowrap">S2</th>
+            <th className="px-2 py-2.5 text-right whitespace-nowrap">S3</th>
+            <th className="px-2 py-2.5 text-center whitespace-nowrap">Mini Sectors</th>
+            <th className="px-2 py-2.5 text-right whitespace-nowrap">Last</th>
+            <th className="px-2 py-2.5 text-right whitespace-nowrap">Best</th>
+            <th className="px-2 py-2.5 text-center w-10">Tire</th>
+            <th className="px-2 py-2.5 text-center w-10">Pit</th>
           </tr>
         </thead>
         <tbody>
@@ -388,7 +374,7 @@ export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[
                     entry.position
                   )}
                 </td>
-                <td className="px-2 py-2 truncate">
+                <td className="px-2 py-2 whitespace-nowrap">
                   <div className="flex items-center gap-2">
                     <div
                       className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
@@ -409,7 +395,7 @@ export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[
                     <span className="font-bold">{entry.acronym}</span>
                   </div>
                 </td>
-                <td className="px-2 py-2 text-right font-mono text-f1-text-secondary whitespace-nowrap truncate">
+                <td className="px-2 py-2 text-right font-mono text-f1-text-secondary whitespace-nowrap">
                   {entry.position === 1
                     ? "—"
                     : entry.interval !== null
@@ -418,7 +404,7 @@ export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[
                         : `${entry.interval}`
                       : "—"}
                 </td>
-                <td className="px-2 py-2 text-right font-mono text-f1-text-secondary whitespace-nowrap truncate">
+                <td className="px-2 py-2 text-right font-mono text-f1-text-secondary whitespace-nowrap">
                   {entry.position === 1
                     ? "LEADER"
                     : entry.gapToLeader !== null
@@ -436,7 +422,7 @@ export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[
                 <td className={cn("px-2 py-2 text-right font-mono text-xs whitespace-nowrap", getSectorColor(s3, pb.s3, ob.s3))}>
                   {s3 !== null ? s3.toFixed(3) : "—"}
                 </td>
-                <td className="px-2 py-2 overflow-hidden">
+                <td className="px-2 py-2">
                   <MiniSectors segments={entry.segments} />
                 </td>
                 <td className="px-2 py-2 text-right font-mono whitespace-nowrap">
@@ -445,7 +431,7 @@ export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[
                 <td
                   className={cn(
                     "px-2 py-2 text-right font-mono whitespace-nowrap",
-                    entry.bestLap === overallBest && "text-purple-400 font-bold"
+                    entry.bestLap !== null && entry.bestLap === overallBest && "text-purple-400 font-bold"
                   )}
                 >
                   {formatLapTime(entry.bestLap)}
