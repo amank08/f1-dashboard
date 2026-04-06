@@ -296,7 +296,7 @@ function MiniSectors({ segments }: { segments: (number | null)[][] }) {
   if (allSegments.length === 0) return null;
 
   return (
-    <div className="flex gap-px">
+    <div className="flex gap-px justify-center">
       {segments.map((sector, si) => (
           <div key={si} className={cn("flex gap-px", si > 0 && "ml-1")}>
             {sector.map((seg, mi) => (
@@ -422,7 +422,7 @@ export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[
                 <td className={cn("px-2 py-2 text-right font-mono text-xs whitespace-nowrap", getSectorColor(s3, pb.s3, ob.s3))}>
                   {s3 !== null ? s3.toFixed(3) : "—"}
                 </td>
-                <td className="px-2 py-2">
+                <td className="px-2 py-2 text-center">
                   <MiniSectors segments={entry.segments} />
                 </td>
                 <td className="px-2 py-2 text-right font-mono whitespace-nowrap">
