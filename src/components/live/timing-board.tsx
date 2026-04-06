@@ -158,36 +158,31 @@ export function buildTimingData(
       }
     }
 
-    // Time-based masking: during replay, reveal mini-sectors progressively
+    // Time-based masking: during replay, only show mini-sectors for
+    // fully completed sectors. In-progress sectors stay all gray until
+    // the driver crosses the sector boundary, then all segments appear
+    // at once. This matches F1 broadcast behaviour — no partial reveals
+    // with "future" colors that the driver hasn't actually reached yet.
     if (replayTimestamp != null) {
       const meta = latestLapMeta.get(dn);
       if (meta) {
         const lapStart = new Date(meta.dateStart).getTime();
-        const elapsed = (replayTimestamp - lapStart) / 1000; // seconds into the lap
+        const elapsed = (replayTimestamp - lapStart) / 1000;
 
         const [d1, d2, d3] = meta.durations;
-        // Cumulative sector boundaries (seconds)
         const s1End = d1 ?? Infinity;
         const s2End = s1End + (d2 ?? Infinity);
-        // s3End would be the full lap — anything past s2End is in sector 3
 
         for (let si = 0; si < 3; si++) {
-          const sectorStart = si === 0 ? 0 : si === 1 ? s1End : s2End;
-          const sectorDuration = meta.durations[si];
+          const sectorEnd = si === 0 ? s1End : si === 1 ? s2End : s2End + (d3 ?? Infinity);
           const sectorLen = counts[si];
           if (sectorLen === 0) continue;
 
-          if (elapsed <= sectorStart) {
-            // Haven't reached this sector yet — all gray
+          if (elapsed < sectorEnd) {
+            // Sector not yet complete — all gray
             segs[si] = Array<null>(sectorLen).fill(null);
-          } else if (sectorDuration != null && elapsed < sectorStart + sectorDuration) {
-            // Partially through this sector — reveal proportionally
-            const inSector = elapsed - sectorStart;
-            const fraction = inSector / sectorDuration;
-            const revealCount = Math.floor(fraction * sectorLen);
-            segs[si] = segs[si].map((v, idx) => (idx < revealCount ? v : null));
           }
-          // else: sector fully elapsed — show all segments as-is
+          // else: sector complete — show all segments as-is
         }
       }
     }
