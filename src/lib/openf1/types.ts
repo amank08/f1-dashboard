@@ -132,6 +132,7 @@ export interface RaceControlMessage {
   flag: string | null;
   scope: string | null;
   sector: number | null;
+  qualifying_phase: number | null;
   message: string;
 }
 

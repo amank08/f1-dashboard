@@ -24,7 +24,7 @@ interface SessionReplayProps {
   raceControl: RaceControlMessage[];
   onTimeChange?: (time: number) => void;
   timingEntries?: TimingEntry[];
-  retiredDrivers?: Set<number>;
+  retiredDrivers?: Map<number, string>;
 }
 
 const LAP_SESSION_TYPES = new Set(["Race", "Sprint"]);
@@ -66,7 +66,7 @@ export function SessionReplay({
     if (!timingEntries || timingEntries.length === 0) return status;
 
     for (const e of timingEntries) {
-      if (retiredDrivers?.has(e.driverNumber)) {
+      if (retiredDrivers?.get(e.driverNumber)) {
         status.set(e.driverNumber, "retired");
       } else if (e.position === 1) {
         status.set(e.driverNumber, "leader");

@@ -318,19 +318,60 @@ export default function SessionAnalysisPage() {
     );
   }, [replayTime, drivers, positions, intervals, stints, laps]);
 
-  // Detect retired drivers from timing entries.
-  // A driver is retired if their lap count is <90% of the leader's AND
-  // they haven't started a new lap recently (within 3 min of replay time).
-  // This avoids marking drivers who rejoin after a garage stop.
+  // Detect retired/eliminated drivers from timing entries.
+  // Race: DNF if lap count <90% of leader and no recent laps (3 min).
+  // Qualifying: eliminated if knocked out of Q1/Q2.
+  const isQuali = sessions?.find((s) => s.session_key === sessionKey)?.session_type === "Qualifying";
+
   const retiredDrivers = useMemo(() => {
-    const set = new Set<number>();
-    if (!replayTimingEntries || replayTimingEntries.length === 0) return set;
+    const map = new Map<number, string>();
+    if (!replayTimingEntries || replayTimingEntries.length === 0) return map;
+
+    if (isQuali && raceControl && replayTime != null) {
+      // Determine qualifying phase boundaries from race control
+      const cutoff = new Date(replayTime).toISOString();
+      let q1End: string | null = null;
+      let q2End: string | null = null;
+
+      for (const msg of raceControl) {
+        if (msg.date > cutoff) continue;
+        if (msg.category !== "SessionStatus" || msg.message !== "SESSION FINISHED") continue;
+        const qp = msg.qualifying_phase;
+        if (qp === null || qp === undefined) {
+          // First SESSION FINISHED without qp = Q1 end
+          if (!q1End) q1End = msg.date;
+        } else if (qp === 2) {
+          q2End = msg.date;
+        }
+      }
+
+      if (q1End && laps) {
+        // Find drivers who have NO laps after Q1 ended (up to cutoff)
+        const driversWithQ2Laps = new Set<number>();
+        const driversWithQ3Laps = new Set<number>();
+        for (const l of laps) {
+          if (l.date_start > cutoff) continue;
+          if (l.date_start > q1End) driversWithQ2Laps.add(l.driver_number);
+          if (q2End && l.date_start > q2End) driversWithQ3Laps.add(l.driver_number);
+        }
+
+        for (const e of replayTimingEntries) {
+          if (q2End && !driversWithQ3Laps.has(e.driverNumber) && driversWithQ2Laps.has(e.driverNumber)) {
+            map.set(e.driverNumber, "Q2");
+          } else if (!driversWithQ2Laps.has(e.driverNumber)) {
+            map.set(e.driverNumber, "Q1");
+          }
+        }
+      }
+      return map;
+    }
+
+    // Race/Sprint: DNF detection
     const leaderEntry = replayTimingEntries.find((e) => e.position === 1);
     const leaderLap = leaderEntry?.currentLap ?? 0;
     const dnfThreshold = Math.floor(leaderLap * 0.9);
-    if (leaderLap <= 2) return set;
+    if (leaderLap <= 2) return map;
 
-    // Find each driver's latest lap start time
     const latestLapStart = new Map<number, number>();
     if (laps && replayTime != null) {
       const cutoff = replayTime;
@@ -346,17 +387,15 @@ export default function SessionAnalysisPage() {
     for (const e of replayTimingEntries) {
       if (e.position === 1) continue;
       if (e.currentLap >= dnfThreshold) continue;
-      // Check if this driver is still actively lapping
       const lastStart = latestLapStart.get(e.driverNumber);
       if (replayTime != null && lastStart != null) {
         const staleness = replayTime - lastStart;
-        // If they started a lap within 3 minutes, they're still racing
         if (staleness < 180_000) continue;
       }
-      set.add(e.driverNumber);
+      map.set(e.driverNumber, "OUT");
     }
-    return set;
-  }, [replayTimingEntries, laps, replayTime]);
+    return map;
+  }, [replayTimingEntries, laps, replayTime, isQuali, raceControl]);
 
   const replayRaceControl = useMemo(() => {
     if (!replayTime || !raceControl) return raceControl ?? [];

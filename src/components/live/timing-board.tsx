@@ -312,7 +312,7 @@ function MiniSectors({ segments }: { segments: (number | null)[][] }) {
   );
 }
 
-export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[]; retiredDrivers?: Set<number> }) {
+export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[]; retiredDrivers?: Map<number, string> }) {
   if (entries.length === 0) {
     return (
       <div className="rounded-lg border border-f1-border bg-f1-surface p-8 text-center text-f1-text-muted">
@@ -357,7 +357,8 @@ export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[
             const [s1, s2, s3] = entry.sectorTimes;
             const pb = entry.personalBestSectors;
             const ob = overallBestSectors;
-            const isOut = retiredDrivers?.has(entry.driverNumber) ?? false;
+            const outLabel = retiredDrivers?.get(entry.driverNumber);
+            const isOut = !!outLabel;
 
             return (
               <tr
@@ -369,7 +370,7 @@ export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[
               >
                 <td className="px-2 py-2 text-center font-bold">
                   {isOut ? (
-                    <span className="text-red-400">OUT</span>
+                    <span className="text-red-400">{outLabel}</span>
                   ) : (
                     entry.position
                   )}
