@@ -38,11 +38,11 @@ export const ReplayMap = memo(function ReplayMap({
   const hasActiveFlag = trackFlagStatus?.some((f) => f !== null) ?? false;
 
   return (
-    <div className="relative w-full rounded-lg border border-f1-border bg-f1-surface p-4">
+    <div className="relative w-full rounded-lg border border-f1-border bg-f1-surface p-2">
       <svg
         viewBox={viewBox}
         className="h-full w-full"
-        style={{ aspectRatio: "1 / 1", maxHeight: "calc(100vh - 300px)" }}
+        style={{ maxHeight: "calc(100vh - 350px)" }}
         preserveAspectRatio="xMidYMid meet"
       >
         {/* Track outline — dimmed when sector paths are showing flags */}
