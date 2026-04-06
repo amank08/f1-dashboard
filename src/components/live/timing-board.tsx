@@ -101,20 +101,32 @@ export function buildTimingData(
   const latestSectors = new Map<number, [number | null, number | null, number | null]>();
   const latestSegments = new Map<number, (number | null)[][]>();
   const personalBestSectors = new Map<number, SectorBests>();
-  // Compute expected mini-sector count per sector from ALL session laps
-  // (not just the time-filtered subset). This keeps the grid layout
-  // stable during replay — no +1 box appearing as new laps enter scope.
-  const sectorCounts = new Map<number, [number, number, number]>();
-  for (const l of (allLaps ?? laps)) {
-    const dn = l.driver_number;
-    const s1len = l.segments_sector_1?.length ?? 0;
-    const s2len = l.segments_sector_2?.length ?? 0;
-    const s3len = l.segments_sector_3?.length ?? 0;
-    const prev = sectorCounts.get(dn) ?? [0, 0, 0];
-    if (s1len > prev[0]) prev[0] = s1len;
-    if (s2len > prev[1]) prev[1] = s2len;
-    if (s3len > prev[2]) prev[2] = s3len;
-    sectorCounts.set(dn, prev);
+  // Mini-sector count per sector is a fixed property of the circuit.
+  // OpenF1 segment arrays vary in length due to pit laps and partial
+  // data, so we use the MODE (most common count) across all session
+  // laps rather than the max. Computed from all laps (not the time-
+  // filtered subset) so the grid layout is stable during replay.
+  const sectorCounts: [number, number, number] = [0, 0, 0];
+  {
+    const freq: [Map<number, number>, Map<number, number>, Map<number, number>] = [new Map(), new Map(), new Map()];
+    for (const l of (allLaps ?? laps)) {
+      const lens = [
+        l.segments_sector_1?.length ?? 0,
+        l.segments_sector_2?.length ?? 0,
+        l.segments_sector_3?.length ?? 0,
+      ];
+      for (let si = 0; si < 3; si++) {
+        if (lens[si] > 0) freq[si].set(lens[si], (freq[si].get(lens[si]) ?? 0) + 1);
+      }
+    }
+    for (let si = 0; si < 3; si++) {
+      let best = 0;
+      let bestCount = 0;
+      for (const [len, count] of freq[si]) {
+        if (count > bestCount) { best = len; bestCount = count; }
+      }
+      sectorCounts[si] = best;
+    }
   }
 
   // Track latest lap metadata for time-based masking
@@ -150,19 +162,21 @@ export function buildTimingData(
     }
   }
 
-  // Pad incomplete segments with nulls and apply time-based masking for replay
+  // Pad/trim segments to the fixed circuit mini-sector count and apply
+  // time-based masking for replay.
   for (const [dn, segs] of latestSegments) {
-    const counts = sectorCounts.get(dn);
-    if (!counts) continue;
-
-    // First, pad every sector to the expected count
+    // Normalize each sector to the fixed count: pad short arrays with
+    // null and trim long ones (data noise from pit laps).
     for (let i = 0; i < 3; i++) {
-      const expected = counts[i];
-      if (expected > 0 && segs[i].length < expected) {
+      const expected = sectorCounts[i];
+      if (expected === 0) continue;
+      if (segs[i].length < expected) {
         segs[i] = [
           ...segs[i],
           ...Array<null>(expected - segs[i].length).fill(null),
         ];
+      } else if (segs[i].length > expected) {
+        segs[i] = segs[i].slice(0, expected);
       }
     }
 
@@ -182,7 +196,7 @@ export function buildTimingData(
         for (let si = 0; si < 3; si++) {
           const sectorStart = si === 0 ? 0 : si === 1 ? s1End : s2End;
           const sectorDuration = meta.durations[si];
-          const sectorLen = counts[si];
+          const sectorLen = sectorCounts[si];
           if (sectorLen === 0) continue;
 
           if (elapsed <= sectorStart) {
