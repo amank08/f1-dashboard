@@ -58,9 +58,9 @@ export function SessionReplay({
     [replay.currentTime, laps]
   );
 
-  // Derive leader / lapped status from timing board entries
+  // Derive leader / lapped / retired status from timing board + race control
   const driverLapStatus = useMemo(() => {
-    const status = new Map<number, "leader" | "lapped" | null>();
+    const status = new Map<number, "leader" | "lapped" | "retired" | null>();
     if (!timingEntries) return status;
     for (const e of timingEntries) {
       if (e.position === 1) {
@@ -74,8 +74,19 @@ export function SessionReplay({
         status.set(e.driverNumber, null);
       }
     }
+    // Mark retired drivers from race control messages up to current time
+    const cutoff = new Date(replay.currentTime).toISOString();
+    for (const msg of raceControl) {
+      if (msg.date > cutoff) continue;
+      if (
+        msg.driver_number != null &&
+        /RETIRED|STOPPED/i.test(msg.message)
+      ) {
+        status.set(msg.driver_number, "retired");
+      }
+    }
     return status;
-  }, [timingEntries]);
+  }, [timingEntries, raceControl, replay.currentTime]);
 
   // Phase-based status for Practice/Qualifying
   const phases = useMemo(
