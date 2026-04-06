@@ -327,42 +327,62 @@ export default function SessionAnalysisPage() {
     const map = new Map<number, string>();
     if (!replayTimingEntries || replayTimingEntries.length === 0) return map;
 
-    if (isQuali && raceControl && replayTime != null) {
-      // Determine qualifying phase boundaries from race control
+    if (isQuali && raceControl && replayTime != null && positions) {
+      // Determine qualifying phase end times from race control.
+      // Add 90s buffer after SESSION FINISHED so drivers can finish
+      // their flying lap before we snapshot eliminations.
       const cutoff = new Date(replayTime).toISOString();
-      let q1End: string | null = null;
-      let q2End: string | null = null;
+      let q1EndTime: number | null = null;
+      let q2EndTime: number | null = null;
 
       for (const msg of raceControl) {
         if (msg.date > cutoff) continue;
         if (msg.category !== "SessionStatus" || msg.message !== "SESSION FINISHED") continue;
         const qp = msg.qualifying_phase;
         if (qp === null || qp === undefined) {
-          // First SESSION FINISHED without qp = Q1 end
-          if (!q1End) q1End = msg.date;
+          if (!q1EndTime) q1EndTime = new Date(msg.date).getTime() + 90_000;
         } else if (qp === 2) {
-          q2End = msg.date;
+          q2EndTime = new Date(msg.date).getTime() + 90_000;
         }
       }
 
-      if (q1End && laps) {
-        // Find drivers who have NO laps after Q1 ended (up to cutoff)
-        const driversWithQ2Laps = new Set<number>();
-        const driversWithQ3Laps = new Set<number>();
-        for (const l of laps) {
-          if (l.date_start > cutoff) continue;
-          if (l.date_start > q1End) driversWithQ2Laps.add(l.driver_number);
-          if (q2End && l.date_start > q2End) driversWithQ3Laps.add(l.driver_number);
-        }
-
-        for (const e of replayTimingEntries) {
-          if (q2End && !driversWithQ3Laps.has(e.driverNumber) && driversWithQ2Laps.has(e.driverNumber)) {
-            map.set(e.driverNumber, "Q2");
-          } else if (!driversWithQ2Laps.has(e.driverNumber)) {
-            map.set(e.driverNumber, "Q1");
+      // Snapshot positions at a given time to find the bottom N
+      const positionsAt = (time: number): Map<number, number> => {
+        const latest = new Map<number, { pos: number; date: number }>();
+        for (const p of positions) {
+          const t = new Date(p.date).getTime();
+          if (t > time) continue;
+          const prev = latest.get(p.driver_number);
+          if (!prev || t > prev.date) {
+            latest.set(p.driver_number, { pos: p.position, date: t });
           }
         }
+        return new Map([...latest].map(([dn, v]) => [dn, v.pos]));
+      };
+
+      // After Q1 + buffer: bottom 6 are eliminated
+      if (q1EndTime && replayTime >= q1EndTime) {
+        const q1Pos = positionsAt(q1EndTime);
+        const sorted = [...q1Pos.entries()].sort((a, b) => a[1] - b[1]);
+        const eliminated = sorted.slice(-6);
+        for (const [dn] of eliminated) {
+          map.set(dn, "Q1");
+        }
       }
+
+      // After Q2 + buffer: next bottom 6 (of remaining) are eliminated
+      if (q2EndTime && replayTime >= q2EndTime) {
+        const q2Pos = positionsAt(q2EndTime);
+        // Exclude Q1-eliminated drivers
+        const remaining = [...q2Pos.entries()]
+          .filter(([dn]) => !map.has(dn))
+          .sort((a, b) => a[1] - b[1]);
+        const eliminated = remaining.slice(-6);
+        for (const [dn] of eliminated) {
+          map.set(dn, "Q2");
+        }
+      }
+
       return map;
     }
 
