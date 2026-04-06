@@ -287,6 +287,8 @@ export default function SessionAnalysisPage() {
     });
   }, [raceStats, drivers]);
 
+  const isQuali = sessions?.find((s) => s.session_key === sessionKey)?.session_type === "Qualifying";
+
   // Filtered timing data for replay mode sidebar
   const replayTimingEntries = useMemo(() => {
     if (!drivers || !positions || !laps) return [];
@@ -297,7 +299,24 @@ export default function SessionAnalysisPage() {
     const cutoff = new Date(replayTime).toISOString();
     const filteredPositions = positions.filter((p) => p.date <= cutoff);
     const filteredIntervals = iv.filter((i) => i.date <= cutoff);
-    const filteredLaps = laps.filter((l) => l.date_start <= cutoff);
+    let filteredLaps = laps.filter((l) => l.date_start <= cutoff);
+
+    // For qualifying, restrict laps to the current Q phase so personal
+    // bests and session bests reset after each phase (Q1→Q2→Q3).
+    // Each phase starts with a SESSION STARTED message.
+    if (isQuali && raceControl) {
+      let currentPhaseStart: string | null = null;
+      for (const msg of raceControl) {
+        if (msg.date > cutoff) continue;
+        if (msg.category === "SessionStatus" && msg.message === "SESSION STARTED") {
+          currentPhaseStart = msg.date;
+        }
+      }
+      if (currentPhaseStart) {
+        filteredLaps = filteredLaps.filter((l) => l.date_start >= currentPhaseStart!);
+      }
+    }
+
     const maxLapByDriver = new Map<number, number>();
     for (const l of filteredLaps) {
       const cur = maxLapByDriver.get(l.driver_number) ?? 0;
@@ -316,13 +335,11 @@ export default function SessionAnalysisPage() {
       replayTime,
       laps // full unfiltered laps for stable mini-sector grid layout
     );
-  }, [replayTime, drivers, positions, intervals, stints, laps]);
+  }, [replayTime, drivers, positions, intervals, stints, laps, isQuali, raceControl]);
 
   // Detect retired/eliminated drivers from timing entries.
   // Race: DNF if lap count <90% of leader and no recent laps (3 min).
   // Qualifying: eliminated if knocked out of Q1/Q2.
-  const isQuali = sessions?.find((s) => s.session_key === sessionKey)?.session_type === "Qualifying";
-
   const retiredDrivers = useMemo(() => {
     const map = new Map<number, string>();
     if (!replayTimingEntries || replayTimingEntries.length === 0) return map;
