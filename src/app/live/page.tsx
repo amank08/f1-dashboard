@@ -289,19 +289,21 @@ export default function SessionAnalysisPage() {
 
   // Filtered timing data for replay mode sidebar
   const replayTimingEntries = useMemo(() => {
-    if (!drivers || !positions || !intervals || !stints || !laps) return [];
+    if (!drivers || !positions || !laps) return [];
+    const iv = intervals ?? [];
+    const st = stints ?? [];
     if (replayTime === null)
-      return buildTimingData(drivers, positions, intervals, stints, laps);
+      return buildTimingData(drivers, positions, iv, st, laps);
     const cutoff = new Date(replayTime).toISOString();
     const filteredPositions = positions.filter((p) => p.date <= cutoff);
-    const filteredIntervals = intervals.filter((i) => i.date <= cutoff);
+    const filteredIntervals = iv.filter((i) => i.date <= cutoff);
     const filteredLaps = laps.filter((l) => l.date_start <= cutoff);
     const maxLapByDriver = new Map<number, number>();
     for (const l of filteredLaps) {
       const cur = maxLapByDriver.get(l.driver_number) ?? 0;
       if (l.lap_number > cur) maxLapByDriver.set(l.driver_number, l.lap_number);
     }
-    const filteredStints = stints.filter((s) => {
+    const filteredStints = st.filter((s) => {
       const maxLap = maxLapByDriver.get(s.driver_number) ?? 0;
       return s.lap_start != null && s.lap_start <= maxLap;
     });
