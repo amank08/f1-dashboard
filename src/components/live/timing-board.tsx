@@ -312,7 +312,7 @@ function MiniSectors({ segments }: { segments: (number | null)[][] }) {
   );
 }
 
-export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[]; retiredDrivers?: Map<number, string> }) {
+export function TimingBoard({ entries, retiredDrivers, isQualifying }: { entries: TimingEntry[]; retiredDrivers?: Map<number, string>; isQualifying?: boolean }) {
   if (entries.length === 0) {
     return (
       <div className="rounded-lg border border-f1-border bg-f1-surface p-8 text-center text-f1-text-muted">
@@ -340,8 +340,8 @@ export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[
           <tr className="border-b border-f1-border bg-f1-surface text-xs font-semibold uppercase text-f1-text-muted">
             <th className="px-2 py-2.5 text-center w-10">Pos</th>
             <th className="px-2 py-2.5 text-left whitespace-nowrap">Driver</th>
-            <th className="px-2 py-2.5 text-right whitespace-nowrap">Int</th>
-            <th className="px-2 py-2.5 text-right whitespace-nowrap">Gap</th>
+            {!isQualifying && <th className="px-2 py-2.5 text-right whitespace-nowrap">Int</th>}
+            {!isQualifying && <th className="px-2 py-2.5 text-right whitespace-nowrap">Gap</th>}
             <th className="px-2 py-2.5 text-right whitespace-nowrap">S1</th>
             <th className="px-2 py-2.5 text-right whitespace-nowrap">S2</th>
             <th className="px-2 py-2.5 text-right whitespace-nowrap">S3</th>
@@ -349,7 +349,7 @@ export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[
             <th className="px-2 py-2.5 text-right whitespace-nowrap">Last</th>
             <th className="px-2 py-2.5 text-right whitespace-nowrap">Best</th>
             <th className="px-2 py-2.5 text-center w-10">Tire</th>
-            <th className="px-2 py-2.5 text-center w-10">Pit</th>
+            {!isQualifying && <th className="px-2 py-2.5 text-center w-10">Pit</th>}
           </tr>
         </thead>
         <tbody>
@@ -396,24 +396,28 @@ export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[
                     <span className="font-bold">{entry.acronym}</span>
                   </div>
                 </td>
-                <td className="px-2 py-2 text-right font-mono text-f1-text-secondary whitespace-nowrap">
-                  {entry.position === 1
-                    ? "—"
-                    : entry.interval !== null
-                      ? typeof entry.interval === "number"
-                        ? `+${entry.interval.toFixed(3)}`
-                        : `${entry.interval}`
-                      : "—"}
-                </td>
-                <td className="px-2 py-2 text-right font-mono text-f1-text-secondary whitespace-nowrap">
-                  {entry.position === 1
-                    ? "LEADER"
-                    : entry.gapToLeader !== null
-                      ? typeof entry.gapToLeader === "number"
-                        ? `+${entry.gapToLeader.toFixed(3)}`
-                        : `${entry.gapToLeader}`
-                      : "—"}
-                </td>
+                {!isQualifying && (
+                  <td className="px-2 py-2 text-right font-mono text-f1-text-secondary whitespace-nowrap">
+                    {entry.position === 1
+                      ? "—"
+                      : entry.interval !== null
+                        ? typeof entry.interval === "number"
+                          ? `+${entry.interval.toFixed(3)}`
+                          : `${entry.interval}`
+                        : "—"}
+                  </td>
+                )}
+                {!isQualifying && (
+                  <td className="px-2 py-2 text-right font-mono text-f1-text-secondary whitespace-nowrap">
+                    {entry.position === 1
+                      ? "LEADER"
+                      : entry.gapToLeader !== null
+                        ? typeof entry.gapToLeader === "number"
+                          ? `+${entry.gapToLeader.toFixed(3)}`
+                          : `${entry.gapToLeader}`
+                        : "—"}
+                  </td>
+                )}
                 <td className={cn("px-2 py-2 text-right font-mono text-xs whitespace-nowrap", getSectorColor(s1, pb.s1, ob.s1))}>
                   {s1 !== null ? s1.toFixed(3) : "—"}
                 </td>
@@ -450,9 +454,11 @@ export function TimingBoard({ entries, retiredDrivers }: { entries: TimingEntry[
                     </span>
                   )}
                 </td>
-                <td className="px-2 py-2 text-center text-f1-text-muted">
-                  {entry.pitCount}
-                </td>
+                {!isQualifying && (
+                  <td className="px-2 py-2 text-center text-f1-text-muted">
+                    {entry.pitCount}
+                  </td>
+                )}
               </tr>
             );
           })}

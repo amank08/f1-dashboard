@@ -834,7 +834,7 @@ export default function SessionAnalysisPage() {
                   ))}
                 </div>
               ) : (
-                <TimingBoard entries={replayTimingEntries} retiredDrivers={retiredDrivers} />
+                <TimingBoard entries={replayTimingEntries} retiredDrivers={retiredDrivers} isQualifying={isQuali} />
               )}
             </div>
             <div className="space-y-4 order-last lg:order-none">
