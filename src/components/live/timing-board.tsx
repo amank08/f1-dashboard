@@ -244,12 +244,16 @@ export function buildTimingData(
       const s2End = s1End + (d2 ?? Infinity);
       const s3End = s2End + (d3 ?? Infinity);
 
-      // S1: if not yet completed, carry over previous lap's S1
-      if (elapsed < s1End) sectors[0] = prev?.[0] ?? null;
-      // S2: if not yet completed, carry over previous lap's S2
-      if (elapsed < s2End) sectors[1] = prev?.[1] ?? null;
-      // S3: if not yet completed, carry over previous lap's S3
-      if (elapsed < s3End) sectors[2] = prev?.[2] ?? null;
+      if (elapsed < s1End) {
+        // Still in S1: carry over all three from previous lap
+        sectors[0] = prev?.[0] ?? null;
+        sectors[1] = prev?.[1] ?? null;
+        sectors[2] = prev?.[2] ?? null;
+      } else {
+        // S1 completed: show new S1, blank S2/S3 until completed
+        if (elapsed < s2End) sectors[1] = null;
+        if (elapsed < s3End) sectors[2] = null;
+      }
     }
   }
 
