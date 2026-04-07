@@ -21,11 +21,8 @@ export function Navbar() {
     <nav className="sticky top-0 z-50 border-b border-f1-border/50 bg-f1-bg/90 backdrop-blur-xl">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-f1-accent font-bold text-white text-xs">
-            UC
-          </div>
-          <span className="text-base font-semibold tracking-tight">Undercut</span>
+        <Link href="/" className="flex items-center">
+          <img src="/logo.png" alt="Undercut" className="h-8" />
         </Link>
 
         {/* Desktop nav */}
