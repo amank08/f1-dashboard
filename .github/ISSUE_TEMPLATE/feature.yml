@@ -1,0 +1,50 @@
+name: Feature Request
+description: Request a new feature for Undercut
+labels: ["enhancement"]
+body:
+  - type: input
+    id: feature-name
+    attributes:
+      label: Feature Name
+      placeholder: e.g., Driver head-to-head lap comparison
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What should this feature do?
+      placeholder: Describe the feature in a few sentences.
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected-areas
+    attributes:
+      label: Pages / Components Affected
+      description: Which parts of the app does this touch?
+      placeholder: |
+        e.g.,
+        - src/app/live/page.tsx
+        - src/components/live/timing-board.tsx
+        - New component needed
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - Frontend only
+        - Data / API
+        - Full stack (frontend + data)
+        - Styling / UI
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra-context
+    attributes:
+      label: Extra Context
+      description: Any references, screenshots, or additional notes?
