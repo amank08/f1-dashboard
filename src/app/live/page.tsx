@@ -449,15 +449,10 @@ export default function SessionAnalysisPage() {
       if (msg.message === "SESSION FINISHED") finishes++;
     }
 
-    // Active drivers in each phase (total minus already eliminated)
-    const totalDrivers = replayTimingEntries.length;
-    if (totalDrivers === 0) return undefined;
-
-    // Q1 active and not yet finished → knockout at totalDrivers - 5
-    // (bottom 6 positions are in the zone)
-    if (starts >= 1 && finishes < 1) return totalDrivers - 5;
-    // Q2 active → remaining is totalDrivers - 6, knockout at position (totalDrivers - 6) - 5
-    if (starts >= 2 && finishes < 2) return totalDrivers - 6 - 5;
+    // Q1 active: P17+ in knockout zone
+    if (starts >= 1 && finishes < 1) return 16;
+    // Q2 active: P11+ in knockout zone
+    if (starts >= 2 && finishes < 2) return 10;
     // Q3 or session over → no knockout zone
     return undefined;
   }, [isQuali, raceControl, replayTime, replayTimingEntries.length]);
