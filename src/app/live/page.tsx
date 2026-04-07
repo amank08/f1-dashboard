@@ -432,6 +432,36 @@ export default function SessionAnalysisPage() {
     return map;
   }, [replayTimingEntries, laps, replayTime, isQuali, raceControl, positions]);
 
+  // Knockout zone: position at which drivers are in danger of elimination.
+  // During Q1 the bottom 6 are eliminated, during Q2 the next bottom 6.
+  // In Q3 or after elimination is finalized, no knockout zone.
+  const qualiKnockoutPos = useMemo(() => {
+    if (!isQuali || !raceControl || replayTime == null) return undefined;
+    const cutoff = new Date(replayTime).toISOString();
+
+    // Count SESSION STARTED / SESSION FINISHED to determine current phase
+    let starts = 0;
+    let finishes = 0;
+    for (const msg of raceControl) {
+      if (msg.date > cutoff) continue;
+      if (msg.category !== "SessionStatus") continue;
+      if (msg.message === "SESSION STARTED") starts++;
+      if (msg.message === "SESSION FINISHED") finishes++;
+    }
+
+    // Active drivers in each phase (total minus already eliminated)
+    const totalDrivers = replayTimingEntries.length;
+    if (totalDrivers === 0) return undefined;
+
+    // Q1 active and not yet finished → knockout at totalDrivers - 5
+    // (bottom 6 positions are in the zone)
+    if (starts >= 1 && finishes < 1) return totalDrivers - 5;
+    // Q2 active → remaining is totalDrivers - 6, knockout at position (totalDrivers - 6) - 5
+    if (starts >= 2 && finishes < 2) return totalDrivers - 6 - 5;
+    // Q3 or session over → no knockout zone
+    return undefined;
+  }, [isQuali, raceControl, replayTime, replayTimingEntries.length]);
+
   const replayRaceControl = useMemo(() => {
     if (!replayTime || !raceControl) return raceControl ?? [];
     const cutoff = new Date(replayTime).toISOString();
@@ -846,7 +876,7 @@ export default function SessionAnalysisPage() {
                   ))}
                 </div>
               ) : (
-                <TimingBoard entries={replayTimingEntries} retiredDrivers={retiredDrivers} isQualifying={isQuali} />
+                <TimingBoard entries={replayTimingEntries} retiredDrivers={retiredDrivers} isQualifying={isQuali} knockoutPosition={qualiKnockoutPos} />
               )}
             </div>
           </div>
