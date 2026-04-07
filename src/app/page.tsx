@@ -43,11 +43,9 @@ export default function Home() {
           <p className="text-sm font-semibold uppercase tracking-widest text-f1-accent">
             Formula 1 Dashboard
           </p>
-          <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
-            <span className="bg-gradient-to-r from-f1-accent to-f1-accent-hover bg-clip-text text-transparent">
-              Undercut
-            </span>
-          </h1>
+          <div className="mt-4">
+            <img src="/logo.svg" alt="Undercut" className="h-16 sm:h-20 lg:h-24" />
+          </div>
           <p className="mt-4 max-w-lg text-lg text-f1-text-secondary">
             Explore race data, lap times, pit strategies, telemetry,
             and live timing — powered by OpenF1.
