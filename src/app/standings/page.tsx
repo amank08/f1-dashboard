@@ -58,7 +58,7 @@ export default function StandingsPage() {
             className={cn(
               "px-4 py-1.5 rounded-md text-sm font-semibold capitalize transition-colors",
               tab === t
-                ? "bg-f1-red text-white"
+                ? "bg-f1-accent text-white"
                 : "text-f1-text-secondary hover:text-f1-text"
             )}
           >

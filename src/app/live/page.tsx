@@ -680,7 +680,7 @@ export default function SessionAnalysisPage() {
               className={cn(
                 "px-3 py-2 text-sm font-semibold transition-colors",
                 viewMode === "results"
-                  ? "bg-f1-red text-white"
+                  ? "bg-f1-accent text-white"
                   : "bg-f1-surface text-f1-text-secondary hover:bg-f1-card"
               )}
             >
@@ -691,7 +691,7 @@ export default function SessionAnalysisPage() {
               className={cn(
                 "px-3 py-2 text-sm font-semibold transition-colors",
                 viewMode === "replay"
-                  ? "bg-f1-red text-white"
+                  ? "bg-f1-accent text-white"
                   : "bg-f1-surface text-f1-text-secondary hover:bg-f1-card"
               )}
             >

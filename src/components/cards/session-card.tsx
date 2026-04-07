@@ -13,14 +13,14 @@ export function SessionCard({ session }: { session: Session }) {
 
   return (
     <Link href={`/race/${session.session_key}`}>
-      <div className="group flex items-center justify-between rounded-lg border border-f1-border bg-f1-surface p-4 transition-all hover:border-f1-red/50 hover:bg-f1-card">
+      <div className="group flex items-center justify-between rounded-xl border border-f1-border bg-f1-surface p-4 transition-all hover:border-f1-accent/40 hover:bg-f1-card">
         <div className="flex items-center gap-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-f1-card text-sm font-bold text-f1-text-secondary">
             {session.session_name.charAt(0)}
             {session.session_name.match(/\d/)?.[0] || ""}
           </div>
           <div>
-            <h4 className="font-semibold group-hover:text-f1-red transition-colors">
+            <h4 className="font-semibold group-hover:text-f1-accent transition-colors">
               {session.session_name}
             </h4>
             <div className="flex items-center gap-2 text-xs text-f1-text-muted">

@@ -20,7 +20,7 @@ export function Tabs({
           className={cn(
             "rounded-md px-4 py-2 text-sm font-semibold transition-colors",
             activeTab === tab.key
-              ? "bg-f1-red text-white"
+              ? "bg-f1-accent text-white"
               : "text-f1-text-secondary hover:text-f1-text"
           )}
         >

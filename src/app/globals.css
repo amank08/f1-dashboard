@@ -1,15 +1,20 @@
 @import "tailwindcss";
 
 :root {
-  --f1-bg: #15151E;
-  --f1-surface: #1E1E2E;
-  --f1-card: #252536;
-  --f1-border: #2E2E42;
+  --f1-bg: #050510;
+  --f1-surface: #0e0e14;
+  --f1-card: #111118;
+  --f1-border: #1a1a24;
+  --f1-border-hover: #2a2a3a;
+  --f1-accent: #4f8fff;
+  --f1-accent-hover: #70a5ff;
+  --f1-accent-muted: #3b6fd4;
+  --f1-accent-light: #0f1f3a;
   --f1-red: #E10600;
   --f1-red-hover: #FF1801;
-  --f1-text: #FFFFFF;
-  --f1-text-secondary: #A0A0B0;
-  --f1-text-muted: #6B6B7B;
+  --f1-text: #f0f0f5;
+  --f1-text-secondary: #9898a8;
+  --f1-text-muted: #5e5e70;
   --f1-success: #00D2BE;
   --f1-warning: #FFC906;
   --f1-soft: #FF3333;
@@ -24,6 +29,11 @@
   --color-f1-surface: var(--f1-surface);
   --color-f1-card: var(--f1-card);
   --color-f1-border: var(--f1-border);
+  --color-f1-border-hover: var(--f1-border-hover);
+  --color-f1-accent: var(--f1-accent);
+  --color-f1-accent-hover: var(--f1-accent-hover);
+  --color-f1-accent-muted: var(--f1-accent-muted);
+  --color-f1-accent-light: var(--f1-accent-light);
   --color-f1-red: var(--f1-red);
   --color-f1-red-hover: var(--f1-red-hover);
   --color-f1-text: var(--f1-text);
@@ -31,28 +41,28 @@
   --color-f1-text-muted: var(--f1-text-muted);
   --color-f1-success: var(--f1-success);
   --color-f1-warning: var(--f1-warning);
-  --font-sans: var(--font-titillium);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--f1-bg);
   color: var(--f1-text);
-  font-family: var(--font-titillium), system-ui, sans-serif;
 }
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--f1-bg);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--f1-border);
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -61,10 +71,16 @@ body {
 
 /* Skeleton animation */
 @keyframes skeleton-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.8; }
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
 }
 
 .animate-skeleton {
   animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+/* Gradient shift for hero */
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }

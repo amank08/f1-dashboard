@@ -90,7 +90,7 @@ export const ReplayControls = memo(function ReplayControls({
           step={0.01}
           value={progress}
           onChange={handleScrub}
-          className="replay-slider h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-f1-border accent-f1-red"
+          className="replay-slider h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-f1-border accent-f1-accent"
         />
         <span className="w-16 font-mono text-xs text-f1-text-secondary">
           {formatElapsed(duration)}
@@ -170,7 +170,7 @@ export const ReplayControls = memo(function ReplayControls({
               className={cn(
                 "rounded-md border px-2 py-1 text-xs font-semibold transition-colors",
                 speed === s
-                  ? "border-f1-red bg-f1-red text-white"
+                  ? "border-f1-accent bg-f1-accent text-white"
                   : "border-f1-border bg-f1-surface text-f1-text-secondary hover:bg-f1-card"
               )}
             >

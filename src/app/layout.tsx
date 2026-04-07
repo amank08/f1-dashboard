@@ -1,15 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Titillium_Web } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import { SWRProvider } from "@/lib/swr-config";
 import { Navbar } from "@/components/layout/navbar";
 import { PWARegister } from "@/components/pwa-register";
 import "./globals.css";
-
-const titillium = Titillium_Web({
-  variable: "--font-titillium",
-  subsets: ["latin"],
-  weight: ["300", "400", "600", "700"],
-});
 
 export const metadata: Metadata = {
   title: "Undercut",
@@ -30,7 +25,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#15151E",
+  themeColor: "#050510",
   width: "device-width",
   initialScale: 1,
 };
@@ -42,10 +37,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${titillium.variable} antialiased`}>
+      <body className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}>
         <SWRProvider>
           <Navbar />
-          <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
+          <main className="mx-auto max-w-7xl px-6 py-8">{children}</main>
           <PWARegister />
         </SWRProvider>
       </body>

@@ -23,7 +23,7 @@ export function RaceCard({ meeting }: { meeting: Meeting }) {
 
   return (
     <Link href={`/calendar/${meeting.meeting_key}`}>
-      <div className="group rounded-lg border border-f1-border bg-f1-surface p-5 transition-all hover:border-f1-red/50 hover:bg-f1-card">
+      <div className="group rounded-xl border border-f1-border bg-f1-surface p-5 transition-all hover:border-f1-accent/40 hover:bg-f1-card">
         <div className="flex items-start justify-between">
           <Badge variant={status.variant}>{status.label}</Badge>
           <span className="text-xs text-f1-text-muted">
@@ -31,7 +31,7 @@ export function RaceCard({ meeting }: { meeting: Meeting }) {
           </span>
         </div>
 
-        <h3 className="mt-3 text-lg font-bold leading-tight group-hover:text-f1-red transition-colors">
+        <h3 className="mt-3 text-lg font-bold leading-tight group-hover:text-f1-accent transition-colors">
           {meeting.meeting_name}
         </h3>
 

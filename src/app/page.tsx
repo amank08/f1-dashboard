@@ -21,24 +21,53 @@ export default function Home() {
   const nextRace = upcomingRaces?.[0];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       {/* Hero */}
-      <div className="rounded-xl bg-gradient-to-r from-f1-red/20 to-f1-surface border border-f1-border p-8">
-        <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-          <span className="text-f1-red">Undercut</span>
-        </h1>
-        <p className="mt-3 max-w-lg text-f1-text-secondary">
-          Explore Formula 1 race data, lap times, pit strategies, telemetry,
-          and live timing — powered by OpenF1.
-        </p>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Link
-            href="/live"
-            className="inline-flex items-center gap-2 rounded-md bg-f1-red px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-f1-red-hover"
-          >
-            <Timer size={16} />
-            Session Timing
-          </Link>
+      <div
+        className="relative overflow-hidden rounded-2xl border border-f1-border p-10 sm:p-12"
+        style={{
+          background: "linear-gradient(135deg, #050510, #0a1a3a, #1a3a6a)",
+          backgroundSize: "200% 200%",
+          animation: "gradient-shift 8s ease infinite",
+        }}
+      >
+        {/* Dot grid overlay */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-30"
+          style={{
+            backgroundImage: "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.07) 1px, transparent 0)",
+            backgroundSize: "24px 24px",
+          }}
+        />
+        <div className="relative">
+          <p className="text-sm font-semibold uppercase tracking-widest text-f1-accent">
+            Formula 1 Dashboard
+          </p>
+          <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
+            <span className="bg-gradient-to-r from-f1-accent to-f1-accent-hover bg-clip-text text-transparent">
+              Undercut
+            </span>
+          </h1>
+          <p className="mt-4 max-w-lg text-lg text-f1-text-secondary">
+            Explore race data, lap times, pit strategies, telemetry,
+            and live timing — powered by OpenF1.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              href="/live"
+              className="inline-flex items-center gap-2 rounded-lg bg-f1-accent px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-f1-accent/20 transition-all hover:bg-f1-accent-hover hover:shadow-f1-accent/30"
+            >
+              <Timer size={16} />
+              Session Timing
+            </Link>
+            <Link
+              href="/calendar"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-6 py-3 text-sm font-medium text-f1-text backdrop-blur-sm transition-all hover:border-white/25 hover:bg-white/10"
+            >
+              <Calendar size={16} />
+              Race Calendar
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -79,9 +108,9 @@ export default function Home() {
       <div className="grid gap-4 sm:grid-cols-2">
         {latestRace && (
           <Link href="/live">
-            <div className="h-full rounded-lg border border-f1-border bg-f1-surface p-6 transition-all hover:border-f1-red/50 hover:bg-f1-card">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase text-green-400">
-                <Flag size={14} />
+            <div className="group h-full rounded-xl border border-f1-border bg-f1-surface p-6 transition-all hover:border-f1-accent/40 hover:bg-f1-card">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-400">
+                <Flag size={13} />
                 Latest Race
               </div>
               <h3 className="mt-3 text-xl font-bold">
@@ -94,7 +123,7 @@ export default function Home() {
                 {format(parseISO(latestRace.date_start), "MMM d")} –{" "}
                 {format(parseISO(latestRace.date_end), "MMM d, yyyy")}
               </p>
-              <div className="mt-4 flex items-center gap-1 text-sm font-semibold text-f1-red">
+              <div className="mt-4 flex items-center gap-1 text-sm font-semibold text-f1-accent transition-colors group-hover:text-f1-accent-hover">
                 View Results <ArrowRight size={14} />
               </div>
             </div>
@@ -102,9 +131,9 @@ export default function Home() {
         )}
 
         {nextRace && (
-          <div className="h-full rounded-lg border border-f1-border bg-f1-surface p-6">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase text-blue-400">
-              <Calendar size={14} />
+          <div className="h-full rounded-xl border border-f1-border bg-f1-surface p-6">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-f1-accent">
+              <Calendar size={13} />
               Next Race
             </div>
             <h3 className="mt-3 text-xl font-bold">

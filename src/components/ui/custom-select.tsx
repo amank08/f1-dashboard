@@ -51,7 +51,7 @@ export function CustomSelect({
         onClick={() => setOpen(!open)}
         className={cn(
           "flex w-full items-center gap-2 rounded-md border border-f1-border bg-f1-surface px-3 py-2 text-left text-sm font-semibold text-f1-text",
-          "focus:border-f1-red focus:outline-none focus:ring-1 focus:ring-f1-red",
+          "focus:border-f1-accent focus:outline-none focus:ring-1 focus:ring-f1-accent",
           disabled && "opacity-50 cursor-not-allowed"
         )}
       >
@@ -87,7 +87,7 @@ export function CustomSelect({
               className={cn(
                 "flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors",
                 opt.value === value
-                  ? "bg-f1-red/10 text-f1-red font-semibold"
+                  ? "bg-f1-accent/10 text-f1-accent font-semibold"
                   : "text-f1-text hover:bg-f1-card"
               )}
             >

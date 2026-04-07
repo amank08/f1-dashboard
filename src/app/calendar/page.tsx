@@ -74,9 +74,9 @@ export default function CalendarPage() {
               <div
                 key={meeting.meeting_key}
                 className={cn(
-                  "rounded-lg border bg-f1-surface transition-all",
+                  "rounded-xl border bg-f1-surface transition-all",
                   isOngoing
-                    ? "border-f1-red/60 shadow-sm shadow-f1-red/10"
+                    ? "border-f1-accent/60 shadow-sm shadow-f1-accent/10"
                     : isPastRace
                     ? "border-f1-border opacity-75"
                     : "border-f1-border"
@@ -100,7 +100,7 @@ export default function CalendarPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-bold">{meeting.meeting_name}</span>
                       {isOngoing && (
-                        <span className="rounded-full bg-f1-red/10 px-2 py-0.5 text-xs font-semibold uppercase text-f1-red">
+                        <span className="rounded-full bg-f1-accent/10 px-2 py-0.5 text-xs font-semibold uppercase text-f1-accent">
                           Live
                         </span>
                       )}
@@ -125,7 +125,7 @@ export default function CalendarPage() {
                     {isPastRace ? (
                       <CheckCircle2 size={16} className="text-green-500" />
                     ) : isOngoing ? (
-                      <Clock size={16} className="text-f1-red" />
+                      <Clock size={16} className="text-f1-accent" />
                     ) : (
                       <Circle size={16} className="text-f1-text-muted" />
                     )}
@@ -133,7 +133,7 @@ export default function CalendarPage() {
                     {isPastRace && raceSessionKey ? (
                       <Link
                         href={`/live?session=${raceSessionKey}`}
-                        className="flex items-center gap-1 text-sm font-semibold text-f1-red transition-colors hover:text-f1-red/80"
+                        className="flex items-center gap-1 text-sm font-semibold text-f1-accent transition-colors hover:text-f1-accent/80"
                       >
                         Results <ArrowRight size={13} />
                       </Link>

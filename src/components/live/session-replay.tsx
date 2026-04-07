@@ -193,7 +193,7 @@ export function SessionReplay({
       <div className="space-y-4">
         <div className="flex aspect-square w-full items-center justify-center rounded-lg border border-f1-border bg-f1-surface">
           <div className="w-64 text-center">
-            <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-f1-border border-t-f1-red" />
+            <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-f1-border border-t-f1-accent" />
             <p className="text-sm text-f1-text-secondary">
               Loading position data…
             </p>
