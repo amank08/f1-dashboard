@@ -1,5 +1,6 @@
 "use client";
 
+import { motion, AnimatePresence } from "framer-motion";
 import type { Driver, Position, Interval, Stint, LapData } from "@/lib/openf1/types";
 import { getTeamColor, TIRE_COLORS, getTeamLogoUrl, getTeamLogoStyle } from "@/lib/utils/colors";
 import { formatLapTime } from "@/lib/utils/formatters";
@@ -361,8 +362,10 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying }: { entries
             const isOut = !!outLabel;
 
             return (
-              <tr
+              <motion.tr
                 key={entry.driverNumber}
+                layout="position"
+                transition={{ type: "spring", damping: 25, stiffness: 200 }}
                 className={cn(
                   "border-b border-f1-border/50 transition-colors hover:bg-f1-card/50",
                   isOut && "opacity-40"
@@ -459,7 +462,7 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying }: { entries
                     {entry.pitCount}
                   </td>
                 )}
-              </tr>
+              </motion.tr>
             );
           })}
         </tbody>
