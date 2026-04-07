@@ -827,6 +827,18 @@ export default function SessionAnalysisPage() {
                   <Skeleton className="h-24" />
                 </div>
               )}
+              <div className="space-y-4 order-last lg:order-none">
+                <h3 className="text-sm font-semibold uppercase text-f1-text-muted">
+                  Race Control
+                </h3>
+                {raceControl ? (
+                  <RaceControlFeed messages={replayRaceControl} />
+                ) : (
+                  <Skeleton className="h-64" />
+                )}
+              </div>
+            </div>
+            <div className="space-y-4">
               {dataLoading ? (
                 <div className="space-y-2">
                   {Array.from({ length: 20 }).map((_, i) => (
@@ -835,16 +847,6 @@ export default function SessionAnalysisPage() {
                 </div>
               ) : (
                 <TimingBoard entries={replayTimingEntries} retiredDrivers={retiredDrivers} isQualifying={isQuali} />
-              )}
-            </div>
-            <div className="space-y-4 order-last lg:order-none">
-              <h3 className="text-sm font-semibold uppercase text-f1-text-muted">
-                Race Control
-              </h3>
-              {raceControl ? (
-                <RaceControlFeed messages={replayRaceControl} />
-              ) : (
-                <Skeleton className="h-64" />
               )}
             </div>
           </div>
