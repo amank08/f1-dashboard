@@ -207,7 +207,7 @@ export function buildTimingData(
         const lapStart = new Date(meta.dateStart).getTime();
         const elapsed = (replayTimestamp - lapStart) / 1000; // seconds into the lap
 
-        const [d1, d2, d3] = meta.durations;
+        const [d1, d2] = meta.durations;
         // Cumulative sector boundaries (seconds)
         const s1End = d1 ?? Infinity;
         const s2End = s1End + (d2 ?? Infinity);

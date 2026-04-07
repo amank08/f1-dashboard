@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 function getStatus(meeting: Meeting) {
   const end = parseISO(meeting.date_end);
   const start = parseISO(meeting.date_start);
-  const now = new Date();
 
   if (isPast(end)) return { label: "Completed", variant: "green" as const };
   if (isFuture(start)) return { label: "Upcoming", variant: "blue" as const };

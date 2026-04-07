@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { format, parseISO } from "date-fns";
-import { Radio, Play, Pause, Volume2 } from "lucide-react";
+import { Radio, Play, Pause } from "lucide-react";
 import type { TeamRadio, Driver } from "@/lib/openf1/types";
 import { getTeamColor } from "@/lib/utils/colors";
 import { Skeleton } from "@/components/ui/skeleton";

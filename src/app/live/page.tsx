@@ -268,7 +268,7 @@ export default function SessionAnalysisPage() {
       finishMap,
       totalLaps,
     };
-  }, [drivers, validLaps, positions, resultRows, stints]);
+  }, [drivers, validLaps, positions, stints]);
 
   // Chart data for GridVsFinish
   const gridVsFinishData = useMemo(() => {
@@ -340,7 +340,6 @@ export default function SessionAnalysisPage() {
   // Detect retired/eliminated drivers from timing entries.
   // Race: DNF if lap count <90% of leader and no recent laps (3 min).
   // Qualifying: eliminated if knocked out of Q1/Q2.
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const retiredDrivers = useMemo(() => {
     const map = new Map<number, string>();
     if (!replayTimingEntries || replayTimingEntries.length === 0) return map;
