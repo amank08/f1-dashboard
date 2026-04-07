@@ -340,6 +340,7 @@ export default function SessionAnalysisPage() {
   // Detect retired/eliminated drivers from timing entries.
   // Race: DNF if lap count <90% of leader and no recent laps (3 min).
   // Qualifying: eliminated if knocked out of Q1/Q2.
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const retiredDrivers = useMemo(() => {
     const map = new Map<number, string>();
     if (!replayTimingEntries || replayTimingEntries.length === 0) return map;
@@ -430,7 +431,7 @@ export default function SessionAnalysisPage() {
       map.set(e.driverNumber, "OUT");
     }
     return map;
-  }, [replayTimingEntries, laps, replayTime, isQuali, raceControl]);
+  }, [replayTimingEntries, laps, replayTime, isQuali, raceControl, positions]);
 
   const replayRaceControl = useMemo(() => {
     if (!replayTime || !raceControl) return raceControl ?? [];

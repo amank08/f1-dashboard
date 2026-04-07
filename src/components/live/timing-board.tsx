@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import type { Driver, Position, Interval, Stint, LapData } from "@/lib/openf1/types";
 import { getTeamColor, TIRE_COLORS, getTeamLogoUrl, getTeamLogoStyle } from "@/lib/utils/colors";
 import { formatLapTime } from "@/lib/utils/formatters";
