@@ -24,6 +24,8 @@ interface GridVsFinishData {
 export function GridVsFinishChart({ data }: { data: GridVsFinishData[] }) {
   if (!data.length) return null;
 
+  const maxPos = Math.max(...data.map((d) => Math.max(d.gridPos, d.finishPos)));
+
   return (
     <div className="rounded-lg border border-f1-border bg-f1-surface p-4">
       <h3 className="mb-4 text-sm font-semibold uppercase text-f1-text-muted">
@@ -36,7 +38,7 @@ export function GridVsFinishChart({ data }: { data: GridVsFinishData[] }) {
             type="number"
             dataKey="gridPos"
             name="Grid"
-            domain={[0.5, 20.5]}
+            domain={[0.5, maxPos + 0.5]}
             tick={{ fill: "#888", fontSize: 12 }}
             label={{
               value: "Grid Position",
@@ -50,7 +52,7 @@ export function GridVsFinishChart({ data }: { data: GridVsFinishData[] }) {
             type="number"
             dataKey="finishPos"
             name="Finish"
-            domain={[0.5, 20.5]}
+            domain={[0.5, maxPos + 0.5]}
             reversed
             tick={{ fill: "#888", fontSize: 12 }}
             label={{
@@ -64,7 +66,7 @@ export function GridVsFinishChart({ data }: { data: GridVsFinishData[] }) {
           <ReferenceLine
             segment={[
               { x: 1, y: 1 },
-              { x: 20, y: 20 },
+              { x: maxPos, y: maxPos },
             ]}
             stroke="#555"
             strokeDasharray="5 5"
