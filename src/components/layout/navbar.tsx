@@ -22,7 +22,7 @@ export function Navbar() {
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
         {/* Logo */}
         <Link href="/" className="flex items-center">
-          <img src="/logo.svg" alt="Undercut" className="h-10" />
+          <img src="/logo-nav.svg" alt="Undercut" className="h-10" />
         </Link>
 
         {/* Desktop nav */}
