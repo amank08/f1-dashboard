@@ -1,4 +1,4 @@
-const CACHE_NAME = "undercut-v1";
+const CACHE_NAME = "undercut-v2";
 const PRECACHE_URLS = ["/", "/live"];
 
 self.addEventListener("install", (event) => {
@@ -33,7 +33,7 @@ self.addEventListener("fetch", (event) => {
     fetch(request)
       .then((response) => {
         // Cache successful navigation and static asset responses
-        if (response.ok && (request.mode === "navigate" || url.pathname.match(/\.(js|css|svg|png|ico|woff2?)$/))) {
+        if (response.ok && url.pathname.match(/\.(js|css|svg|png|ico|woff2?)$/)) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
         }
