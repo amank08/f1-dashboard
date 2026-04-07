@@ -144,6 +144,10 @@ export function buildTimingData(
     const prevLap = latestLapNum.get(dn) ?? 0;
     if (l.lap_number > prevLap) latestLapNum.set(dn, l.lap_number);
 
+    // Skip pit out laps — they have garbage sector times and no valid
+    // lap duration, polluting bests and the mini-sector display.
+    if (l.is_pit_out_lap) continue;
+
     // Track personal best sectors
     const pb = personalBestSectors.get(dn) ?? { s1: null, s2: null, s3: null };
     if (l.duration_sector_1 !== null && (pb.s1 === null || l.duration_sector_1 < pb.s1)) pb.s1 = l.duration_sector_1;
