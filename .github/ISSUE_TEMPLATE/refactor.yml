@@ -1,0 +1,36 @@
+name: Refactor
+description: Code restructuring with no behavior change
+labels: ["refactor"]
+title: "refactor: "
+body:
+  - type: input
+    id: task
+    attributes:
+      label: What to Refactor
+      placeholder: e.g., Split results-table into smaller components
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What is being refactored and why?
+      placeholder: Describe the refactor and the motivation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected-areas
+    attributes:
+      label: Files / Components Affected
+      placeholder: |
+        e.g.,
+        - src/components/tables/results-table.tsx
+        - src/lib/utils/analytics.ts
+
+  - type: textarea
+    id: extra-context
+    attributes:
+      label: Extra Context
+      description: Any references or additional notes?

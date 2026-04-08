@@ -1,0 +1,36 @@
+name: Style / UI
+description: Visual or styling change with no logic change
+labels: ["style"]
+title: "style: "
+body:
+  - type: input
+    id: task
+    attributes:
+      label: What to Change
+      placeholder: e.g., Improve mobile spacing on the calendar page
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What should look different and why?
+      placeholder: Describe the visual change.
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected-areas
+    attributes:
+      label: Pages / Components Affected
+      placeholder: |
+        e.g.,
+        - src/app/calendar/page.tsx
+        - src/app/globals.css
+
+  - type: textarea
+    id: extra-context
+    attributes:
+      label: Extra Context
+      description: Screenshots, references, or additional notes?

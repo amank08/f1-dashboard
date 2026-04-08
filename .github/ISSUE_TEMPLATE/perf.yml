@@ -1,0 +1,36 @@
+name: Performance
+description: Performance improvement
+labels: ["performance"]
+title: "perf: "
+body:
+  - type: input
+    id: task
+    attributes:
+      label: What to Improve
+      placeholder: e.g., Reduce replay snapshot build time
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What is slow and what's the proposed fix?
+      placeholder: Describe the performance issue and the approach.
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected-areas
+    attributes:
+      label: Files / Components Affected
+      placeholder: |
+        e.g.,
+        - src/lib/f1/replay-snapshot.ts
+        - src/app/api/f1-replay-positions/route.ts
+
+  - type: textarea
+    id: extra-context
+    attributes:
+      label: Extra Context
+      description: Any profiling data, references, or additional notes?

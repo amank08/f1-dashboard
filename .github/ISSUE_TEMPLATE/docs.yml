@@ -1,0 +1,27 @@
+name: Documentation
+description: Documentation update or addition
+labels: ["docs"]
+title: "docs: "
+body:
+  - type: input
+    id: task
+    attributes:
+      label: What to Document
+      placeholder: e.g., Add setup instructions to README
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What needs to be documented or updated?
+      placeholder: Describe what's missing or outdated.
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra-context
+    attributes:
+      label: Extra Context
+      description: Any references or additional notes?

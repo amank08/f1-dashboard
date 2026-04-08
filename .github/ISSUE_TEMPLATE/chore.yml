@@ -1,0 +1,27 @@
+name: Chore
+description: Maintenance, dependencies, or configuration
+labels: ["chore"]
+title: "chore: "
+body:
+  - type: input
+    id: task
+    attributes:
+      label: Task
+      placeholder: e.g., Upgrade recharts to v4
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What needs to be done and why?
+      placeholder: Describe the maintenance task.
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra-context
+    attributes:
+      label: Extra Context
+      description: Any references, links, or additional notes?
