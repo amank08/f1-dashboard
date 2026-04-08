@@ -2,7 +2,8 @@
 
 import type { Driver, LapData, Position, Interval, Stint, RaceControlMessage } from "@/lib/openf1/types";
 import { formatLapTime } from "@/lib/utils/formatters";
-import { getTeamColor, TIRE_COLORS, getTeamLogoUrl, getTeamLogoStyle } from "@/lib/utils/colors";
+import { getTeamColor, getTeamLogoUrl, getTeamLogoStyle } from "@/lib/utils/colors";
+import { TyreIcon } from "@/components/ui/tyre-icon";
 import { KNOWN_EARLY_STARTERS } from "@/lib/utils/constants";
 import { cn } from "@/lib/utils/cn";
 
@@ -612,16 +613,7 @@ export function ResultsTable({
                 </td>
                 <td className="px-3 py-2.5 text-center">
                   {row.compound && (
-                    <span
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold"
-                      style={{
-                        color:
-                          TIRE_COLORS[row.compound as keyof typeof TIRE_COLORS] ?? "#888",
-                        backgroundColor: `${TIRE_COLORS[row.compound as keyof typeof TIRE_COLORS] ?? "#888"}20`,
-                      }}
-                    >
-                      {row.compound.charAt(0)}
-                    </span>
+                    <TyreIcon compound={row.compound} size={22} />
                   )}
                 </td>
               </tr>
@@ -764,16 +756,7 @@ export function ResultsTable({
                   })}
                   <td className="px-3 py-2.5 text-center">
                     {row.compound && (
-                      <span
-                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold"
-                        style={{
-                          color:
-                            TIRE_COLORS[row.compound as keyof typeof TIRE_COLORS] ?? "#888",
-                          backgroundColor: `${TIRE_COLORS[row.compound as keyof typeof TIRE_COLORS] ?? "#888"}20`,
-                        }}
-                      >
-                        {row.compound.charAt(0)}
-                      </span>
+                      <TyreIcon compound={row.compound} size={22} />
                     )}
                   </td>
                 </tr>
@@ -866,16 +849,7 @@ export function ResultsTable({
                 </td>
                 <td className="px-3 py-2.5 text-center">
                   {row.compound && (
-                    <span
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold"
-                      style={{
-                        color:
-                          TIRE_COLORS[row.compound as keyof typeof TIRE_COLORS] ?? "#888",
-                        backgroundColor: `${TIRE_COLORS[row.compound as keyof typeof TIRE_COLORS] ?? "#888"}20`,
-                      }}
-                    >
-                      {row.compound.charAt(0)}
-                    </span>
+                    <TyreIcon compound={row.compound} size={22} />
                   )}
                 </td>
                 <td className="px-3 py-2.5 text-center text-f1-text-muted">

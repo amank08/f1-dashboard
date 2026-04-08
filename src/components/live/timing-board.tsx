@@ -2,7 +2,8 @@
 
 import { motion } from "framer-motion";
 import type { Driver, Position, Interval, Stint, LapData } from "@/lib/openf1/types";
-import { getTeamColor, TIRE_COLORS, getTeamLogoUrl, getTeamLogoStyle } from "@/lib/utils/colors";
+import { getTeamColor, getTeamLogoUrl, getTeamLogoStyle } from "@/lib/utils/colors";
+import { TyreIcon } from "@/components/ui/tyre-icon";
 import { formatLapTime } from "@/lib/utils/formatters";
 import { cn } from "@/lib/utils/cn";
 
@@ -454,14 +455,8 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
                 </td>
                 <td className="px-2 py-2 text-center">
                   {entry.compound && (
-                    <span
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold"
-                      style={{
-                        color: TIRE_COLORS[entry.compound as keyof typeof TIRE_COLORS] ?? "#888",
-                        backgroundColor: `${TIRE_COLORS[entry.compound as keyof typeof TIRE_COLORS] ?? "#888"}20`,
-                      }}
-                    >
-                      {entry.compound.charAt(0)}
+                    <span className="inline-flex items-center justify-center">
+                      <TyreIcon compound={entry.compound} size={22} />
                     </span>
                   )}
                 </td>

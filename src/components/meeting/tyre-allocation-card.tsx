@@ -1,5 +1,6 @@
 import { getTyreAllocation } from "@/lib/data/tyre-allocations";
 import { TIRE_COLORS } from "@/lib/utils/colors";
+import { TyreIcon } from "@/components/ui/tyre-icon";
 
 function getCompoundRange(year: number): number[] {
   const count = year === 2025 ? 6 : 5;
@@ -44,12 +45,7 @@ export function TyreAllocationCard({
           const cNumber = allocation[type];
           return (
             <div key={type} className="flex flex-col items-center gap-1">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-full border-2 text-xs font-bold"
-                style={{ borderColor: color, color }}
-              >
-                C{cNumber}
-              </div>
+              <TyreIcon compound={type.toUpperCase()} size={36} label={`C${cNumber}`} />
               <span className="text-xs text-f1-text-secondary">{name}</span>
             </div>
           );
