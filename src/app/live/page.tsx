@@ -439,20 +439,18 @@ export default function SessionAnalysisPage() {
     if (!isQuali || !raceControl || replayTime == null) return undefined;
     const cutoff = new Date(replayTime).toISOString();
 
-    // Count SESSION STARTED / SESSION FINISHED to determine current phase
+    // Count SESSION STARTED messages to determine current phase
     let starts = 0;
-    let finishes = 0;
     for (const msg of raceControl) {
       if (msg.date > cutoff) continue;
       if (msg.category !== "SessionStatus") continue;
       if (msg.message === "SESSION STARTED") starts++;
-      if (msg.message === "SESSION FINISHED") finishes++;
     }
 
-    // Q1 active: P17+ in knockout zone
-    if (starts >= 1 && finishes < 1) return 16;
-    // Q2 active: P11+ in knockout zone
-    if (starts >= 2 && finishes < 2) return 10;
+    // Between Q1 start and Q2 start (includes flying laps after 00:00): P17+ in knockout zone
+    if (starts === 1) return 16;
+    // Between Q2 start and Q3 start (includes flying laps after 00:00): P11+ in knockout zone
+    if (starts === 2) return 10;
     // Q3 or session over → no knockout zone
     return undefined;
   }, [isQuali, raceControl, replayTime, replayTimingEntries.length]);
