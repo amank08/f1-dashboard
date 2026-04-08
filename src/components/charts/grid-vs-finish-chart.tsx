@@ -9,6 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  Customized,
 } from "recharts";
 import { getTeamColor } from "@/lib/utils/colors";
 
@@ -70,13 +71,30 @@ export function GridVsFinishChart({ data }: { data: GridVsFinishData[] }) {
             ]}
             stroke="#4a4a5a"
             strokeDasharray="5 5"
-            label={{
-              value: "No change",
-              fill: "#6a6a7a",
-              fontSize: 10,
-              position: "center",
-              angle: 45,
-              dy: -8,
+          />
+          <Customized
+            component={({ xAxisMap, yAxisMap }: { xAxisMap?: Record<string, { scale: (v: number) => number }>; yAxisMap?: Record<string, { scale: (v: number) => number }> }) => {
+              const xScale = xAxisMap ? Object.values(xAxisMap)[0]?.scale : null;
+              const yScale = yAxisMap ? Object.values(yAxisMap)[0]?.scale : null;
+              if (!xScale || !yScale) return null;
+              const x1 = xScale(1), y1 = yScale(1);
+              const x2 = xScale(maxPos), y2 = yScale(maxPos);
+              const mx = (x1 + x2) / 2;
+              const my = (y1 + y2) / 2;
+              const angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
+              return (
+                <text
+                  x={mx}
+                  y={my}
+                  fill="#6a6a7a"
+                  fontSize={10}
+                  textAnchor="middle"
+                  transform={`rotate(${angle}, ${mx}, ${my})`}
+                  dy={-7}
+                >
+                  No change
+                </text>
+              );
             }}
           />
           <Tooltip
