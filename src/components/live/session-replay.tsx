@@ -160,8 +160,8 @@ export function SessionReplay({
     if (useLapSkips) {
       return totalLaps > 0 ? `Lap ${currentLap} / ${totalLaps}` : "";
     }
-    return getPhaseLabel(replay.currentTime, phases);
-  }, [useLapSkips, currentLap, totalLaps, replay.currentTime, phases]);
+    return getPhaseLabel(replay.currentTime, phases, laps);
+  }, [useLapSkips, currentLap, totalLaps, replay.currentTime, phases, laps]);
 
   // Throttled time reporting to parent (~2 updates/sec for sidebar sync)
   // Uses trailing-edge fallback so the latest value is always delivered,

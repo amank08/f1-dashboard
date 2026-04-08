@@ -146,20 +146,41 @@ export function buildSessionPhases(
 
 /**
  * Get the status label for the current time based on session phases.
- * Returns e.g. "Q1 — 12:30 / 18:00" or "28:15 / 60:00"
+ * Returns a countdown e.g. "Q1 — 05:30" while active.
+ * Holds at "Q1 — 00:00" until all drivers complete their flying lap after the
+ * chequered flag, then transitions to "Break" or "Session ended".
  */
 export function getPhaseLabel(
   currentTime: number,
-  phases: SessionPhase[]
+  phases: SessionPhase[],
+  laps?: LapData[]
 ): string {
   if (phases.length === 0) return "";
 
+  // Active phase: count down to chequered
   for (const phase of phases) {
     if (currentTime >= phase.start && currentTime <= phase.end) {
-      const elapsed = currentTime - phase.start;
-      const duration = phase.end - phase.start;
+      const remaining = phase.end - currentTime;
       const prefix = phase.label !== "Session" ? `${phase.label} — ` : "";
-      return `${prefix}${formatMs(elapsed)} / ${formatMs(duration)}`;
+      return `${prefix}${formatMs(remaining)}`;
+    }
+  }
+
+  // Just after chequered: hold at 00:00 while any flying lap is still running
+  if (laps) {
+    for (const phase of phases) {
+      if (currentTime > phase.end) {
+        const anyStillRunning = laps.some((l) => {
+          if (!l.lap_duration || l.is_pit_out_lap) return false;
+          const lapStart = new Date(l.date_start).getTime();
+          if (lapStart < phase.start || lapStart >= phase.end) return false;
+          return lapStart + l.lap_duration * 1000 > currentTime;
+        });
+        if (anyStillRunning) {
+          const prefix = phase.label !== "Session" ? `${phase.label} — ` : "";
+          return `${prefix}00:00`;
+        }
+      }
     }
   }
 
