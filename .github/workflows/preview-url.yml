@@ -17,6 +17,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           max_timeout: 120
+          check_status: false
 
       - name: Comment preview URL on PR
         uses: marocchino/sticky-pull-request-comment@v2
