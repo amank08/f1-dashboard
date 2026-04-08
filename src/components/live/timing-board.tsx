@@ -344,16 +344,16 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-f1-border bg-f1-surface text-xs font-semibold uppercase text-f1-text-muted">
-            <th className="px-2 py-2.5 text-center w-10">Pos</th>
-            <th className="px-2 py-2.5 text-left whitespace-nowrap">Driver</th>
-            {!isQualifying && <th className="px-2 py-2.5 text-right whitespace-nowrap">Int</th>}
-            {!isQualifying && <th className="px-2 py-2.5 text-right whitespace-nowrap">Gap</th>}
-            <th className="px-2 py-2.5 text-right whitespace-nowrap">S1</th>
-            <th className="px-2 py-2.5 text-right whitespace-nowrap">S2</th>
-            <th className="px-2 py-2.5 text-right whitespace-nowrap">S3</th>
+            <th className="sticky left-0 z-20 bg-f1-surface px-2 py-2.5 text-center w-10">Pos</th>
+            <th className="sticky left-10 z-20 bg-f1-surface px-2 py-2.5 text-left whitespace-nowrap">Driver</th>
+            {!isQualifying && <th className="px-2 py-2.5 text-center whitespace-nowrap">Int</th>}
+            {!isQualifying && <th className="px-2 py-2.5 text-center whitespace-nowrap">Gap</th>}
+            <th className="px-2 py-2.5 text-center whitespace-nowrap">S1</th>
+            <th className="px-2 py-2.5 text-center whitespace-nowrap">S2</th>
+            <th className="px-2 py-2.5 text-center whitespace-nowrap">S3</th>
             <th className="px-2 py-2.5 text-center whitespace-nowrap">Mini Sectors</th>
-            <th className="px-2 py-2.5 text-right whitespace-nowrap">Last</th>
-            <th className="px-2 py-2.5 text-right whitespace-nowrap">Best</th>
+            <th className="px-2 py-2.5 text-center whitespace-nowrap">Last</th>
+            <th className="px-2 py-2.5 text-center whitespace-nowrap">Best</th>
             <th className="px-2 py-2.5 text-center w-10">Tire</th>
             {!isQualifying && <th className="px-2 py-2.5 text-center w-10">Pit</th>}
           </tr>
@@ -380,14 +380,14 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
                   isKnockoutBoundary && "border-t-2 border-t-red-500/40"
                 )}
               >
-                <td className={cn("px-2 py-2 text-center font-bold", inKnockoutZone && "text-red-400/80")}>
+                <td className={cn("sticky left-0 z-10 bg-f1-bg px-2 py-2 text-center font-bold", inKnockoutZone && "text-red-400/80")}>
                   {isOut ? (
                     <span className="text-red-400">{outLabel}</span>
                   ) : (
                     entry.position
                   )}
                 </td>
-                <td className="px-2 py-2 whitespace-nowrap">
+                <td className="sticky left-10 z-10 bg-f1-bg px-2 py-2 whitespace-nowrap">
                   <div className="flex items-center gap-2">
                     <div
                       className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
@@ -409,7 +409,7 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
                   </div>
                 </td>
                 {!isQualifying && (
-                  <td className="px-2 py-2 text-right font-mono text-f1-text-secondary whitespace-nowrap">
+                  <td className="px-2 py-2 text-center font-mono text-f1-text-secondary whitespace-nowrap">
                     {entry.position === 1
                       ? "—"
                       : entry.interval !== null
@@ -420,7 +420,7 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
                   </td>
                 )}
                 {!isQualifying && (
-                  <td className="px-2 py-2 text-right font-mono text-f1-text-secondary whitespace-nowrap">
+                  <td className="px-2 py-2 text-center font-mono text-f1-text-secondary whitespace-nowrap">
                     {entry.position === 1
                       ? "LEADER"
                       : entry.gapToLeader !== null
@@ -430,24 +430,24 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
                         : "—"}
                   </td>
                 )}
-                <td className={cn("px-2 py-2 text-right font-mono text-xs whitespace-nowrap", getSectorColor(s1, pb.s1, ob.s1))}>
+                <td className={cn("px-2 py-2 text-center font-mono text-xs whitespace-nowrap", getSectorColor(s1, pb.s1, ob.s1))}>
                   {s1 !== null ? s1.toFixed(3) : "—"}
                 </td>
-                <td className={cn("px-2 py-2 text-right font-mono text-xs whitespace-nowrap", getSectorColor(s2, pb.s2, ob.s2))}>
+                <td className={cn("px-2 py-2 text-center font-mono text-xs whitespace-nowrap", getSectorColor(s2, pb.s2, ob.s2))}>
                   {s2 !== null ? s2.toFixed(3) : "—"}
                 </td>
-                <td className={cn("px-2 py-2 text-right font-mono text-xs whitespace-nowrap", getSectorColor(s3, pb.s3, ob.s3))}>
+                <td className={cn("px-2 py-2 text-center font-mono text-xs whitespace-nowrap", getSectorColor(s3, pb.s3, ob.s3))}>
                   {s3 !== null ? s3.toFixed(3) : "—"}
                 </td>
                 <td className="px-2 py-2 text-center">
                   <MiniSectors segments={entry.segments} />
                 </td>
-                <td className="px-2 py-2 text-right font-mono whitespace-nowrap">
+                <td className="px-2 py-2 text-center font-mono whitespace-nowrap">
                   {formatLapTime(entry.lastLap)}
                 </td>
                 <td
                   className={cn(
-                    "px-2 py-2 text-right font-mono whitespace-nowrap",
+                    "px-2 py-2 text-center font-mono whitespace-nowrap",
                     entry.bestLap !== null && entry.bestLap === overallBest && "text-purple-400 font-bold"
                   )}
                 >
