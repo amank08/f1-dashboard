@@ -49,18 +49,18 @@ export function TyreIcon({ compound, size = 24, label }: TyreIconProps) {
       <circle
         cx="16"
         cy="16"
-        r="12"
+        r="13"
         fill="none"
         stroke={color}
-        strokeWidth="5"
-        strokeOpacity="0.9"
+        strokeWidth="2.5"
+        strokeOpacity="0.95"
       />
       {/* Inner rim */}
-      <circle cx="16" cy="16" r="8" fill="#06060f" />
+      <circle cx="16" cy="16" r="10.5" fill="#06060f" />
       <circle
         cx="16"
         cy="16"
-        r="8"
+        r="10.5"
         fill="none"
         stroke="#1e1e2a"
         strokeWidth="1"
@@ -72,8 +72,8 @@ export function TyreIcon({ compound, size = 24, label }: TyreIconProps) {
         textAnchor="middle"
         dominantBaseline="central"
         fill={color}
-        fontSize={label ? "7" : "9"}
-        fontWeight="800"
+        fontSize={label ? "8" : "11"}
+        fontWeight="900"
         fontFamily="system-ui, -apple-system, sans-serif"
         letterSpacing="-0.5"
       >
