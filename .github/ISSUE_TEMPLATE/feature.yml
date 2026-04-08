@@ -1,6 +1,7 @@
 name: Feature Request
 description: Request a new feature for Undercut
 labels: ["enhancement"]
+title: "feat: "
 body:
   - type: input
     id: feature-name
