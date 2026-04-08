@@ -76,18 +76,29 @@ export function GridVsFinishChart({ data }: { data: GridVsFinishData[] }) {
               const mx = x + width / 2;
               const my = y + height / 2;
               const angle = Math.atan2(height, width) * (180 / Math.PI);
+              const padX = 26;
+              const padY = 8;
               return (
-                <text
-                  x={mx}
-                  y={my}
-                  fill="#6a6a7a"
-                  fontSize={10}
-                  textAnchor="middle"
-                  transform={`rotate(${angle}, ${mx}, ${my})`}
-                  dy={-7}
-                >
-                  No change
-                </text>
+                <g transform={`rotate(${angle}, ${mx}, ${my})`}>
+                  <rect
+                    x={mx - padX}
+                    y={my - padY}
+                    width={padX * 2}
+                    height={padY * 2}
+                    fill="#0e0e14"
+                  />
+                  <text
+                    x={mx}
+                    y={my}
+                    fill="#6a6a7a"
+                    fontSize={10}
+                    fontFamily="system-ui, sans-serif"
+                    textAnchor="middle"
+                    dy="0.35em"
+                  >
+                    No change
+                  </text>
+                </g>
               );
             }}
           />
