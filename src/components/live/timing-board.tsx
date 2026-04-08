@@ -340,7 +340,7 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-f1-border">
+    <div className="overflow-x-auto rounded-lg border border-f1-border bg-f1-bg">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-f1-border bg-f1-surface text-xs font-semibold uppercase text-f1-text-muted">
@@ -374,20 +374,20 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
                 layout="position"
                 transition={{ type: "spring", damping: 25, stiffness: 200 }}
                 className={cn(
-                  "border-b border-f1-border/50 transition-colors hover:bg-f1-card/50",
+                  "group border-b border-f1-border/50 transition-colors hover:bg-f1-card/50",
                   isOut && "opacity-40",
                   inKnockoutZone && "bg-red-500/5",
                   isKnockoutBoundary && "border-t-2 border-t-red-500/40"
                 )}
               >
-                <td className={cn("sticky left-0 z-10 bg-f1-bg px-2 py-2 text-center font-bold", inKnockoutZone && "text-red-400/80")}>
+                <td className={cn("sticky left-0 z-10 bg-f1-bg group-hover:bg-f1-card/50 transition-colors px-2 py-2 text-center font-bold", inKnockoutZone && "!bg-red-500/5 group-hover:!bg-red-500/10 text-red-400/80")}>
                   {isOut ? (
                     <span className="text-red-400">{outLabel}</span>
                   ) : (
                     entry.position
                   )}
                 </td>
-                <td className="sticky left-10 z-10 bg-f1-bg px-2 py-2 whitespace-nowrap">
+                <td className={cn("sticky left-10 z-10 bg-f1-bg group-hover:bg-f1-card/50 transition-colors px-2 py-2 whitespace-nowrap", inKnockoutZone && "!bg-red-500/5 group-hover:!bg-red-500/10")}>
                   <div className="flex items-center gap-2">
                     <div
                       className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
