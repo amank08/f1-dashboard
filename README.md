@@ -1,122 +1,89 @@
 # Undercut — F1 Dashboard
 
-A real-time Formula 1 data dashboard built with Next.js. Analyze sessions, compare drivers, replay races, and explore detailed timing data powered by the OpenF1 API.
+An F1 data dashboard for race results, session replays, standings, and timing analysis — powered by the [OpenF1 API](https://openf1.org) and built with Next.js.
 
 ## Features
 
-- **Live Timing** — Real-time position updates, intervals, gaps, sector times, and tire tracking
-- **Session Replay** — Interactive replay with car positions on track, playback speed controls, and lap navigation
-- **Race Results** — Comprehensive results tables with grid vs finish, pit stops, and sector breakdowns
-- **Lap Analysis** — Lap time charts, position changes, gap-to-leader progression for up to 4 drivers
-- **Pit Strategy** — Tire strategy visualization with stint merging and degradation analysis
-- **Telemetry** — Speed, throttle, brake, RPM, gear, and DRS data per driver
-- **Weather** — Temperature, humidity, and rainfall tracking throughout sessions
-- **Team Radio** — Audio archive with playback for all team radio messages
-- **Race Control** — Flags, penalties, incidents, and safety car messages
+- **Session Replay** — scrub through any race, qualifying, or practice session with a live track map, timing tower, race control feed, and qualifying knockout zones
+- **Race Results** — lap times, sector splits, tyre compounds, pit stops, and grid vs finish for every session
+- **Lap Analysis** — lap time charts, position changes, and gap-to-leader progression for up to 4 drivers
+- **Pit Strategy** — tyre strategy visualization with stint tracking and degradation analysis
+- **Telemetry** — speed, throttle, brake, gear, and DRS data per driver
+- **Weather** — temperature, humidity, and rainfall throughout sessions
+- **Team Radio** — audio archive with playback for all radio messages
+- **Standings** — driver and constructor championship standings
+- **Calendar** — full season schedule with past results and upcoming events
 - **26 Circuits** — SVG track maps with sector divisions and DRS zones
-- **PWA Support** — Installable as a standalone app on mobile and desktop
+- **PWA** — installable as a standalone app on mobile and desktop
 
 ## Tech Stack
 
-- **Framework:** [Next.js](https://nextjs.org) 16 (App Router)
-- **Language:** TypeScript
-- **Styling:** Tailwind CSS v4
-- **Charts:** Recharts
-- **Data Fetching:** SWR with in-memory and disk caching
-- **Data Source:** [OpenF1 API](https://openf1.org)
-- **Icons:** Lucide React
+- [Next.js 16](https://nextjs.org) (App Router) + React 19
+- TypeScript (strict)
+- Tailwind CSS v4
+- [OpenF1 API](https://openf1.org)
+- SWR + disk cache for data fetching
+- Recharts for charts
+- Framer Motion for animations
+- Deployed on [Vercel](https://vercel.com)
 
 ## Getting Started
-
-### Prerequisites
-
-- Node.js 20+
-- npm
-
-### Installation
 
 ```bash
 git clone https://github.com/amank08/f1-dashboard.git
 cd f1-dashboard
 npm install
-```
-
-### Development
-
-```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000).
 
-### Build
-
-```bash
-npm run build
-npm start
-```
-
-## Scripts
+## Commands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `npm run dev` | Start development server |
 | `npm run build` | Production build |
-| `npm start` | Start production server |
-| `npm run lint` | Run ESLint |
-| `npm test` | Run tests (Vitest) |
-| `npm run test:watch` | Run tests in watch mode |
+| `npm run lint` | ESLint |
+| `npm test` | Vitest unit tests |
+| `npm run pipeline` | Run data pipeline scripts |
 
 ## Project Structure
 
 ```
 src/
-  app/                  # Next.js App Router pages
-    live/               # Live session analysis + replay
-    race/[sessionKey]/  # Session-specific pages (laps, pitstops, radio, telemetry, weather)
-    api/f1/             # OpenF1 API proxy with caching
+  app/                      # Next.js App Router pages
+    api/f1/[...endpoint]/   # OpenF1 proxy with disk cache
+    live/                   # Session replay + timing
+    race/[sessionKey]/      # Per-session analysis (laps, pitstops, telemetry, radio, weather)
+    standings/              # Championship standings
+    calendar/               # Race calendar
   components/
-    charts/             # Recharts visualizations (11 chart types)
-    cards/              # Race, stat, and team radio cards
-    live/               # Timing board, circuit map, replay, podium
-    tables/             # Results table with sector times
-    selectors/          # Driver, season, and comparison selectors
-    ui/                 # Shared UI components (badge, skeleton, tabs)
+    live/                   # Timing board, track map, replay controls, race control feed
+    charts/                 # Recharts wrappers
+    tables/                 # Results table
+    ui/                     # Shared primitives (Button, Skeleton, TyreIcon, etc.)
   lib/
-    data/               # Static circuit paths, DRS zones, tire allocations
-    hooks/              # SWR data-fetching hooks for each OpenF1 endpoint
-    openf1/             # API client, caching, rate limiting, types
-    utils/              # Formatters, colors, analytics, replay processing
+    f1/                     # Replay snapshot builder, circuit paths, constants
+    hooks/                  # SWR data hooks
+    openf1/                 # API client + TypeScript types
+    utils/                  # Formatters, colors, analytics, replay processor
 ```
 
-## Docker
+## Data
 
-```bash
-docker compose up --build
-```
+All F1 data comes from the [OpenF1 API](https://openf1.org). Requests are proxied through `/api/f1/[...endpoint]` and cached to disk at `.cache/openf1/`.
 
-This builds a multi-stage production image and runs the app at [http://localhost:3000](http://localhost:3000).
+> OpenF1 restricts free API access during live sessions. Data becomes available once the session ends.
 
 ## Deployment
 
-The project is configured for [Vercel](https://vercel.com). Connect your GitHub repo at [vercel.com/new](https://vercel.com/new) to get:
+Auto-deploys to [Vercel](https://vercel.com) on push to `main`. Every pull request gets a preview deployment.
 
-- Automatic production deploys on push to `main`
-- Preview deploys on every pull request
-- Edge caching for API routes
+## Contributing
 
-## Testing
-
-Tests use [Vitest](https://vitest.dev) with React Testing Library. Run the suite with:
-
-```bash
-npm test
-```
-
-## CI/CD
-
-GitHub Actions runs lint, test, and build on every push and pull request. [CodeRabbit](https://coderabbit.ai) provides automated code reviews on PRs.
+Bug reports and feature requests welcome — use the [issue templates](.github/ISSUE_TEMPLATE).
 
 ## License
 
-MIT
+[MIT](LICENSE)
