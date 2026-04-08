@@ -32,7 +32,7 @@ export function TyreIcon({ compound, size = 24, label }: TyreIconProps) {
       width={size}
       height={size}
       aria-label={compound}
-      style={{ display: "block", flexShrink: 0 }}
+      style={{ display: "inline-block", flexShrink: 0, verticalAlign: "middle" }}
     >
       {/* Tyre body */}
       <circle cx="16" cy="16" r="15.5" fill="#0d0d14" />

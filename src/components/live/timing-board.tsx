@@ -456,7 +456,7 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
                 <td className="px-2 py-2 text-center">
                   {entry.compound && (
                     <span className="inline-flex items-center justify-center">
-                      <TyreIcon compound={entry.compound} size={22} />
+                      <TyreIcon compound={entry.compound} size={26} />
                     </span>
                   )}
                 </td>

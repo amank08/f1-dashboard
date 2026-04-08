@@ -613,7 +613,7 @@ export function ResultsTable({
                 </td>
                 <td className="px-3 py-2.5 text-center">
                   {row.compound && (
-                    <TyreIcon compound={row.compound} size={22} />
+                    <TyreIcon compound={row.compound} size={26} />
                   )}
                 </td>
               </tr>
@@ -756,7 +756,7 @@ export function ResultsTable({
                   })}
                   <td className="px-3 py-2.5 text-center">
                     {row.compound && (
-                      <TyreIcon compound={row.compound} size={22} />
+                      <TyreIcon compound={row.compound} size={26} />
                     )}
                   </td>
                 </tr>
@@ -849,7 +849,7 @@ export function ResultsTable({
                 </td>
                 <td className="px-3 py-2.5 text-center">
                   {row.compound && (
-                    <TyreIcon compound={row.compound} size={22} />
+                    <TyreIcon compound={row.compound} size={26} />
                   )}
                 </td>
                 <td className="px-3 py-2.5 text-center text-f1-text-muted">
