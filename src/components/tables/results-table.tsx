@@ -91,9 +91,10 @@ export function buildResults(
     if (isFinite(globalBest)) threshold107 = globalBest * 1.07;
   }
 
-  // Calculate fastest lap per driver + its sector times
+  // Calculate fastest lap per driver + its sector times + lap number
   const fastestLaps = new Map<number, number>();
   const fastestLapSectors = new Map<number, [number | null, number | null, number | null]>();
+  const fastestLapNumbers = new Map<number, number>();
   for (const lap of laps) {
     if (lap.lap_duration && !lap.is_pit_out_lap && lap.lap_duration <= threshold107) {
       const current = fastestLaps.get(lap.driver_number);
@@ -104,6 +105,7 @@ export function buildResults(
           lap.duration_sector_2 ?? null,
           lap.duration_sector_3 ?? null,
         ]);
+        fastestLapNumbers.set(lap.driver_number, lap.lap_number);
       }
     }
   }
@@ -280,6 +282,7 @@ export function buildResults(
   // Current compound and pit count per driver
   // Ghost stints are same compound with tyre_age > 0, or preceded by a ≤2 lap stint.
   const currentCompound = new Map<number, string>();
+  const fastestLapCompound = new Map<number, string>();
   const pitCounts = new Map<number, number>();
   if (stints) {
     const stintsByDriver = new Map<number, Stint[]>();
@@ -300,6 +303,22 @@ export function buildResults(
         if (!isGhost) realStops++;
       }
       pitCounts.set(dn, realStops);
+    }
+
+    // For non-race sessions, find the compound used on the fastest lap
+    if (isNonRace) {
+      for (const [driverNum, lapNum] of fastestLapNumbers) {
+        const driverStints = stintsByDriver.get(driverNum);
+        if (!driverStints) continue;
+        const stint = driverStints.find(
+          (s) =>
+            s.lap_start != null &&
+            s.lap_end != null &&
+            lapNum >= s.lap_start &&
+            lapNum <= s.lap_end
+        );
+        if (stint?.compound) fastestLapCompound.set(driverNum, stint.compound);
+      }
     }
   }
 
@@ -333,7 +352,7 @@ export function buildResults(
       }
       row.gridPosition = gridPos;
       row.positionsGained = gridPos !== null ? gridPos - position : null;
-      row.compound = currentCompound.get(driverNum) ?? null;
+      row.compound = (isNonRace ? fastestLapCompound.get(driverNum) : currentCompound.get(driverNum)) ?? null;
       row.pitCount = pitCounts.get(driverNum) ?? null;
       row.bestS1 = bestS1.get(driverNum) ?? null;
       row.bestS2 = bestS2.get(driverNum) ?? null;
