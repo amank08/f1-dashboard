@@ -104,29 +104,27 @@ export default function StandingsPage() {
                   <td className="px-4 py-3 font-bold text-f1-text-muted">
                     {i + 1}
                   </td>
-                  <td className="px-4 py-2">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 shrink-0">
-                        <div
-                          className="w-0.5 h-12 rounded-full shrink-0"
-                          style={{ backgroundColor: getTeamColor(driver.teamColour, driver.team) }}
-                        />
-                        <div
-                          className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg"
-                          style={{ backgroundColor: "var(--f1-card)" }}
-                        >
-                          {headshotHiRes(driver.headshotUrl, driver.team, year) ? (
-                            <img
-                              src={headshotHiRes(driver.headshotUrl, driver.team, year)!}
-                              alt={driver.name}
-                              className="h-full w-full object-cover object-top"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-[10px] font-bold text-f1-text-muted">
-                              {driver.acronym}
-                            </div>
-                          )}
-                        </div>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border-2"
+                        style={{
+                          borderColor: getTeamColor(driver.teamColour, driver.team),
+                          backgroundColor: "var(--f1-card)",
+                          boxShadow: `0 0 8px 1px ${getTeamColor(driver.teamColour, driver.team)}55`,
+                        }}
+                      >
+                        {headshotHiRes(driver.headshotUrl, driver.team, year) ? (
+                          <img
+                            src={headshotHiRes(driver.headshotUrl, driver.team, year)!}
+                            alt={driver.name}
+                            className="h-full w-full object-cover object-top"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[10px] font-bold text-f1-text-muted">
+                            {driver.acronym}
+                          </div>
+                        )}
                       </div>
                       <span className="font-bold">{driver.name}</span>
                       <span className="text-xs text-f1-text-muted">
