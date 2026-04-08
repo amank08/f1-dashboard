@@ -833,8 +833,9 @@ export default function SessionAnalysisPage() {
       {/* Replay mode */}
       {sessionKey && viewMode === "replay" && !dataUnavailable && (
         <div className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
-            <div className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-[1fr_400px] lg:grid-rows-[auto_1fr]">
+            {/* Replay map — always first */}
+            <div className="order-1 space-y-4 lg:col-start-1 lg:row-start-1">
               {drivers && laps ? (
                 <SessionReplay
                   sessionKey={sessionKey}
@@ -852,18 +853,9 @@ export default function SessionAnalysisPage() {
                   <Skeleton className="h-24" />
                 </div>
               )}
-              <div className="space-y-4 order-last lg:order-none">
-                <h3 className="text-sm font-semibold uppercase text-f1-text-muted">
-                  Race Control
-                </h3>
-                {raceControl ? (
-                  <RaceControlFeed messages={replayRaceControl} />
-                ) : (
-                  <Skeleton className="h-64" />
-                )}
-              </div>
             </div>
-            <div className="space-y-4">
+            {/* Timing board — second on mobile, right column on desktop */}
+            <div className="order-2 space-y-4 lg:col-start-2 lg:row-start-1 lg:row-span-2">
               {dataLoading ? (
                 <div className="space-y-2">
                   {Array.from({ length: 20 }).map((_, i) => (
@@ -872,6 +864,17 @@ export default function SessionAnalysisPage() {
                 </div>
               ) : (
                 <TimingBoard entries={replayTimingEntries} retiredDrivers={retiredDrivers} isQualifying={isQuali} knockoutPosition={qualiKnockoutPos} />
+              )}
+            </div>
+            {/* Race control — third on mobile, below map on desktop */}
+            <div className="order-3 space-y-4 lg:col-start-1 lg:row-start-2">
+              <h3 className="text-sm font-semibold uppercase text-f1-text-muted">
+                Race Control
+              </h3>
+              {raceControl ? (
+                <RaceControlFeed messages={replayRaceControl} />
+              ) : (
+                <Skeleton className="h-64" />
               )}
             </div>
           </div>
