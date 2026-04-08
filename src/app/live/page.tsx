@@ -669,60 +669,64 @@ export default function SessionAnalysisPage() {
       )}
 
       {/* Session picker */}
-      <div className="flex flex-wrap items-center gap-3">
-        <SeasonSelector value={year} onChange={handleYearChange} />
+      <div className="space-y-2 sm:space-y-0 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
+        {/* Row 1: year + view toggle (mobile), inline on desktop */}
+        <div className="flex items-center gap-2 sm:contents">
+          <SeasonSelector value={year} onChange={handleYearChange} />
+          {sessionKey && (
+            <div className="flex rounded-md border border-f1-border sm:order-last ml-auto sm:ml-0">
+              <button
+                onClick={() => setViewMode("results")}
+                className={cn(
+                  "px-3 py-2 text-sm font-semibold transition-colors",
+                  viewMode === "results"
+                    ? "bg-f1-accent text-white"
+                    : "bg-f1-surface text-f1-text-secondary hover:bg-f1-card"
+                )}
+              >
+                Results
+              </button>
+              <button
+                onClick={() => setViewMode("replay")}
+                className={cn(
+                  "px-3 py-2 text-sm font-semibold transition-colors",
+                  viewMode === "replay"
+                    ? "bg-f1-accent text-white"
+                    : "bg-f1-surface text-f1-text-secondary hover:bg-f1-card"
+                )}
+              >
+                Replay
+              </button>
+            </div>
+          )}
+        </div>
 
-        <CustomSelect
-          value={meetingKey?.toString() ?? ""}
-          onChange={(v) => handleMeetingChange(Number(v))}
-          disabled={meetingsLoading || sortedMeetings.length === 0}
-          placeholder="Select race weekend…"
-          className="w-64"
-          options={sortedMeetings.map((m) => ({
-            value: String(m.meeting_key),
-            label: m.meeting_name,
-            iconUrl: countryFlagUrl(m.country_code),
-          }))}
-        />
-
-        <CustomSelect
-          value={sessionKey?.toString() ?? ""}
-          onChange={(v) => handleSessionChange(Number(v))}
-          disabled={!meetingKey || sessionsLoading || availableSessions.length === 0}
-          placeholder="Select session…"
-          className="w-48"
-          options={availableSessions.map((s) => ({
-            value: String(s.session_key),
-            label: s.session_name,
-          }))}
-        />
-
-        {sessionKey && (
-          <div className="flex rounded-md border border-f1-border">
-            <button
-              onClick={() => setViewMode("results")}
-              className={cn(
-                "px-3 py-2 text-sm font-semibold transition-colors",
-                viewMode === "results"
-                  ? "bg-f1-accent text-white"
-                  : "bg-f1-surface text-f1-text-secondary hover:bg-f1-card"
-              )}
-            >
-              Results
-            </button>
-            <button
-              onClick={() => setViewMode("replay")}
-              className={cn(
-                "px-3 py-2 text-sm font-semibold transition-colors",
-                viewMode === "replay"
-                  ? "bg-f1-accent text-white"
-                  : "bg-f1-surface text-f1-text-secondary hover:bg-f1-card"
-              )}
-            >
-              Replay
-            </button>
-          </div>
-        )}
+        {/* Row 2: race + session dropdowns (full-width on mobile, fixed on desktop) */}
+        <div className="grid grid-cols-2 gap-2 sm:contents">
+          <CustomSelect
+            value={meetingKey?.toString() ?? ""}
+            onChange={(v) => handleMeetingChange(Number(v))}
+            disabled={meetingsLoading || sortedMeetings.length === 0}
+            placeholder="Select race…"
+            className="sm:w-64"
+            options={sortedMeetings.map((m) => ({
+              value: String(m.meeting_key),
+              label: m.meeting_name,
+              iconUrl: countryFlagUrl(m.country_code),
+            }))}
+          />
+          <CustomSelect
+            value={sessionKey?.toString() ?? ""}
+            onChange={(v) => handleSessionChange(Number(v))}
+            disabled={!meetingKey || sessionsLoading || availableSessions.length === 0}
+            placeholder="Session…"
+            className="sm:w-48"
+            options={availableSessions.map((s) => ({
+              value: String(s.session_key),
+              label: s.session_name,
+            }))}
+          />
+        </div>
       </div>
 
       {/* Loading skeleton */}

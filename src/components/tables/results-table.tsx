@@ -468,7 +468,7 @@ function DriverCell({ driver, size = "sm" }: { driver: Driver; size?: "sm" | "md
       </div>
       <div>
         <span className="font-bold">{driver.name_acronym}</span>
-        <span className="ml-2 text-f1-text-secondary text-xs">
+        <span className="ml-2 text-f1-text-secondary text-xs hidden sm:inline">
           {driver.first_name} {driver.last_name}
         </span>
       </div>
@@ -585,9 +585,9 @@ export function ResultsTable({
               <th className="px-3 py-3 text-right">GAP</th>
               <th className="px-3 py-3 text-center">LAPS</th>
               <th className="px-3 py-3 text-right">FASTEST LAP</th>
-              <th className="px-3 py-3 text-right">S1</th>
-              <th className="px-3 py-3 text-right">S2</th>
-              <th className="px-3 py-3 text-right">S3</th>
+              <th className="px-3 py-3 text-right hidden sm:table-cell">S1</th>
+              <th className="px-3 py-3 text-right hidden sm:table-cell">S2</th>
+              <th className="px-3 py-3 text-right hidden sm:table-cell">S3</th>
               <th className="px-3 py-3 text-center">TIRE</th>
             </tr>
           </thead>
@@ -621,13 +621,13 @@ export function ResultsTable({
                     {formatLapTime(row.fastestLap)}
                   </span>
                 </td>
-                <td className={cn("px-3 py-2.5 text-right font-mono text-xs", getSectorColor(row.fastestLapS1 ?? null, isFinite(overallBestS1) ? overallBestS1 : null, row.bestS1 ?? null))}>
+                <td className={cn("px-3 py-2.5 text-right font-mono text-xs hidden sm:table-cell", getSectorColor(row.fastestLapS1 ?? null, isFinite(overallBestS1) ? overallBestS1 : null, row.bestS1 ?? null))}>
                   {row.fastestLapS1 != null ? row.fastestLapS1.toFixed(3) : "—"}
                 </td>
-                <td className={cn("px-3 py-2.5 text-right font-mono text-xs", getSectorColor(row.fastestLapS2 ?? null, isFinite(overallBestS2) ? overallBestS2 : null, row.bestS2 ?? null))}>
+                <td className={cn("px-3 py-2.5 text-right font-mono text-xs hidden sm:table-cell", getSectorColor(row.fastestLapS2 ?? null, isFinite(overallBestS2) ? overallBestS2 : null, row.bestS2 ?? null))}>
                   {row.fastestLapS2 != null ? row.fastestLapS2.toFixed(3) : "—"}
                 </td>
-                <td className={cn("px-3 py-2.5 text-right font-mono text-xs", getSectorColor(row.fastestLapS3 ?? null, isFinite(overallBestS3) ? overallBestS3 : null, row.bestS3 ?? null))}>
+                <td className={cn("px-3 py-2.5 text-right font-mono text-xs hidden sm:table-cell", getSectorColor(row.fastestLapS3 ?? null, isFinite(overallBestS3) ? overallBestS3 : null, row.bestS3 ?? null))}>
                   {row.fastestLapS3 != null ? row.fastestLapS3.toFixed(3) : "—"}
                 </td>
                 <td className="px-3 py-2.5 text-center">
@@ -797,12 +797,12 @@ export function ResultsTable({
             <th className="px-3 py-3 text-center w-10">POS</th>
             <th className="px-3 py-3 text-left">DRIVER</th>
             <th className="px-3 py-3 text-right">GAP</th>
-            <th className="px-3 py-3 text-center">GRID</th>
-            <th className="px-3 py-3 text-center">+/-</th>
-            <th className="px-3 py-3 text-center">LAPS</th>
+            <th className="px-3 py-3 text-center hidden sm:table-cell">GRID</th>
+            <th className="px-3 py-3 text-center hidden sm:table-cell">+/-</th>
+            <th className="px-3 py-3 text-center hidden sm:table-cell">LAPS</th>
             <th className="px-3 py-3 text-right">FASTEST LAP</th>
             <th className="px-3 py-3 text-center">TIRE</th>
-            <th className="px-3 py-3 text-center">PITS</th>
+            <th className="px-3 py-3 text-center hidden sm:table-cell">PITS</th>
           </tr>
         </thead>
         <tbody>
@@ -837,10 +837,10 @@ export function ResultsTable({
                     ? "LEADER"
                     : formatInterval(row.gapToLeader, false)}
                 </td>
-                <td className="px-3 py-2.5 text-center font-mono text-f1-text-secondary">
+                <td className="px-3 py-2.5 text-center font-mono text-f1-text-secondary hidden sm:table-cell">
                   {row.gridPosition ?? "—"}
                 </td>
-                <td className="px-3 py-2.5 text-center">
+                <td className="px-3 py-2.5 text-center hidden sm:table-cell">
                   {gained > 0 ? (
                     <span className="text-green-400 font-semibold">
                       ▲ {gained}
@@ -853,7 +853,7 @@ export function ResultsTable({
                     <span className="text-f1-text-muted">—</span>
                   )}
                 </td>
-                <td className="px-3 py-2.5 text-center font-mono text-f1-text-secondary">
+                <td className="px-3 py-2.5 text-center font-mono text-f1-text-secondary hidden sm:table-cell">
                   {isDNS ? 0 : row.lapsCompleted ?? "—"}
                 </td>
                 <td className="px-3 py-2.5 text-right">
@@ -871,7 +871,7 @@ export function ResultsTable({
                     <TyreIcon compound={row.compound} size={26} />
                   )}
                 </td>
-                <td className="px-3 py-2.5 text-center text-f1-text-muted">
+                <td className="px-3 py-2.5 text-center text-f1-text-muted hidden sm:table-cell">
                   {row.pitCount ?? "—"}
                 </td>
               </tr>
