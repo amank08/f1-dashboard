@@ -75,7 +75,7 @@ export function GridVsFinishChart({ data }: { data: GridVsFinishData[] }) {
               fill: "#6a6a7a",
               fontSize: 10,
               position: "center",
-              angle: -45,
+              angle: 45,
               dy: -8,
             }}
           />
