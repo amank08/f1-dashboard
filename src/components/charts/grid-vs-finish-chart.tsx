@@ -68,9 +68,16 @@ export function GridVsFinishChart({ data }: { data: GridVsFinishData[] }) {
               { x: 1, y: 1 },
               { x: maxPos, y: maxPos },
             ]}
-            stroke="#555"
+            stroke="#4a4a5a"
             strokeDasharray="5 5"
-            label={{ value: "No change", fill: "#555", fontSize: 10 }}
+            label={{
+              value: "No change",
+              fill: "#6a6a7a",
+              fontSize: 10,
+              position: "center",
+              angle: -45,
+              dy: -8,
+            }}
           />
           <Tooltip
             contentStyle={{
