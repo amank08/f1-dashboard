@@ -380,14 +380,14 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
                   isKnockoutBoundary && "border-t-2 border-t-red-500/40"
                 )}
               >
-                <td className={cn("sticky left-0 z-10 bg-f1-bg group-hover:bg-f1-card/50 transition-colors px-2 py-2 text-center font-bold", inKnockoutZone && "!bg-red-500/5 group-hover:!bg-red-500/10 text-red-400/80")}>
+                <td className={cn("sticky left-0 z-10 bg-f1-bg group-hover:bg-f1-card transition-colors px-2 py-2 text-center font-bold", inKnockoutZone && "!bg-red-500/5 text-red-400/80")}>
                   {isOut ? (
                     <span className="text-red-400">{outLabel}</span>
                   ) : (
                     entry.position
                   )}
                 </td>
-                <td className={cn("sticky left-10 z-10 bg-f1-bg group-hover:bg-f1-card/50 transition-colors px-2 py-2 whitespace-nowrap", inKnockoutZone && "!bg-red-500/5 group-hover:!bg-red-500/10")}>
+                <td className={cn("sticky left-10 z-10 bg-f1-bg group-hover:bg-f1-card transition-colors px-2 py-2 whitespace-nowrap", inKnockoutZone && "!bg-red-500/5")}>
                   <div className="flex items-center gap-2">
                     <div
                       className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
