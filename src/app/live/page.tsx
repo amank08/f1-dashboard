@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils/cn";
 import { getPositionChanges } from "@/lib/utils/analytics";
 import { countryFlagUrl } from "@/lib/utils/formatters";
 import {
+  getQualifyingCutoffs,
   getQualifyingKnockoutPosition,
   getRetiredDrivers,
 } from "@/lib/utils/replay-processor";
@@ -383,172 +384,15 @@ export default function SessionAnalysisPage() {
   // Qualifying: segment times, cutoffs, and knockout positions (all dynamic)
   const qualiCutoffs = useMemo(() => {
     if (!isQualifying || !validLaps || !laps || !raceControl || !resultRows.length) return undefined;
-
-    // Parse qualifying segment boundaries (Q1/Q2/Q3) from race control.
-    // Each segment ends with CHEQUERED FLAG. Red flags cause extra SESSION STARTED
-    // messages within the same segment, so we pair each CHEQUERED FLAG with the
-    // first SESSION STARTED after the previous CHEQUERED FLAG.
-    const segments: { start: string; end: string }[] = [];
-    let pendingStart: string | null = null;
-    for (const msg of raceControl) {
-      if (msg.message === "SESSION STARTED" && pendingStart === null) {
-        pendingStart = msg.date;
-      }
-      if (msg.message === "CHEQUERED FLAG" && pendingStart !== null) {
-        segments.push({ start: pendingStart, end: msg.date });
-        pendingStart = null;
-      }
-    }
-    const segCount = Math.min(segments.length, 3);
-    if (segCount < 2) return undefined;
-    const starts = segments.map((s) => s.start);
-    const ends = segments.map((s) => s.end);
-
-    // Best valid lap per driver per segment (107% rule filters in-laps)
-    function bestInSegment(segStart: string, segEnd: string, nextSegStart?: string): Map<number, number> {
-      const best = new Map<number, number>();
-      // Find fastest lap in this segment for 107% threshold
-      let segFastest = Infinity;
-      for (const lap of validLaps!) {
-        if (!lap.lap_duration || lap.is_pit_out_lap) continue;
-        const boundary = nextSegStart ?? segEnd;
-        if (lap.date_start >= segStart && lap.date_start < boundary && lap.lap_duration < segFastest) {
-          segFastest = lap.lap_duration;
-        }
-      }
-      const segThreshold = isFinite(segFastest) ? segFastest * 1.07 : Infinity;
-      for (const lap of validLaps!) {
-        if (!lap.lap_duration || lap.is_pit_out_lap) continue;
-        if (lap.lap_duration > segThreshold) continue;
-        const boundary = nextSegStart ?? segEnd;
-        if (lap.date_start >= segStart && lap.date_start < boundary) {
-          const cur = best.get(lap.driver_number);
-          if (!cur || lap.lap_duration < cur) {
-            best.set(lap.driver_number, lap.lap_duration);
-          }
-        }
-      }
-      return best;
-    }
-
-    const segBests: Map<number, number>[] = [];
-    for (let i = 0; i < segCount; i++) {
-      segBests.push(bestInSegment(starts[i], ends[i], starts[i + 1]));
-    }
-
-    // Determine each driver's last segment (the furthest they participated in).
-    // Use raw laps so drivers whose times were deleted are still counted.
-    // Then use advancement logic to promote drivers who qualified for a later
-    // segment but didn't set laps in it (e.g. Bortoleto AUS 2026 — made Q3
-    // via Q2 results but didn't run in Q3).
-    const driverLastSeg = new Map<number, number>();
-    for (const row of resultRows) {
-      const dNum = row.driver.driver_number;
-      for (let s = segCount - 1; s >= 0; s--) {
-        const segStart = starts[s];
-        const boundary = starts[s + 1] ?? ends[s];
-        const hasLap = laps!.some(
-          (l) => l.driver_number === dNum && l.date_start >= segStart && l.date_start < boundary
-        );
-        if (hasLap) {
-          driverLastSeg.set(dNum, s);
-          break;
-        }
-      }
-    }
-
-    // Promote drivers who qualified for a later segment based on advancement.
-    // Standard qualifying: top 15 from Q1 → Q2, top 10 from Q2 → Q3.
-    const ADVANCEMENT = [15, 10]; // Q1→Q2, Q2→Q3
-    for (let s = 0; s < segCount - 1; s++) {
-      const times = [...segBests[s].entries()].sort((a, b) => a[1] - b[1]);
-      const advanceCount = ADVANCEMENT[s] ?? 10;
-      const advancedDrivers = times.slice(0, advanceCount).map(([dNum]) => dNum);
-      for (const dNum of advancedDrivers) {
-        const cur = driverLastSeg.get(dNum);
-        if (cur === undefined || cur <= s) {
-          driverLastSeg.set(dNum, s + 1);
-        }
-      }
-    }
-
-    // Drivers with no data at all (DNS) default to Q1 — they never advanced.
-    for (const row of resultRows) {
-      if (!driverLastSeg.has(row.driver.driver_number)) {
-        driverLastSeg.set(row.driver.driver_number, 0);
-      }
-    }
-
-    // Display time = best valid time from the driver's last segment.
-    // If they participated but have no valid time (e.g. deleted for track limits),
-    // they won't appear in segmentTimes and will show "NO TIME".
-    const segmentTimes = new Map<number, number>();
-    for (const row of resultRows) {
-      const dNum = row.driver.driver_number;
-      const seg = driverLastSeg.get(dNum);
-      if (seg != null) {
-        const t = segBests[seg].get(dNum);
-        if (t != null) segmentTimes.set(dNum, t);
-      }
-    }
-
-    // Knockout positions: first position where driver's last segment drops
-    // e.g., if last Q3 driver is at position N, then position N+1 is the first Q2 knockout
-    const sortedByPos = [...resultRows].sort((a, b) => a.position - b.position);
-    let q2KnockoutPos: number | null = null; // first position knocked out in Q2
-    let q1KnockoutPos: number | null = null; // first position knocked out in Q1
-    for (const row of sortedByPos) {
-      const seg = driverLastSeg.get(row.driver.driver_number);
-      if (seg === segCount - 2 && q2KnockoutPos === null) {
-        // This driver's last segment was Q2 (index segCount-2) — first Q2 knockout
-        q2KnockoutPos = row.position;
-      }
-      if (seg === 0 && q1KnockoutPos === null && segCount >= 2) {
-        // This driver only made Q1 — first Q1 knockout
-        q1KnockoutPos = row.position;
-      }
-    }
-
-    // Cutoff times: the slowest driver who advanced from each segment
-    // Q2 cutoff = slowest Q3 participant's Q2 time
-    // Q1 cutoff = slowest Q2 participant's Q1 time
-    let q2CutoffTime: number | null = null;
-    let q1CutoffTime: number | null = null;
-
-    if (segCount >= 3) {
-      // Q2 cutoff: among drivers who made Q3, find the slowest Q2 time
-      let worstQ2ofQ3 = -Infinity;
-      for (const [dNum, seg] of driverLastSeg) {
-        if (seg === segCount - 1) { // made it to Q3
-          const q2Time = segBests[segCount - 2].get(dNum);
-          if (q2Time != null && q2Time > worstQ2ofQ3) worstQ2ofQ3 = q2Time;
-        }
-      }
-      if (worstQ2ofQ3 > 0) q2CutoffTime = worstQ2ofQ3;
-    }
-
-    if (segCount >= 2) {
-      // Q1 cutoff: among drivers who made Q2, find the slowest Q1 time
-      let worstQ1ofQ2 = -Infinity;
-      for (const [dNum, seg] of driverLastSeg) {
-        if (seg >= 1) { // made it to Q2 or beyond
-          const q1Time = segBests[0].get(dNum);
-          if (q1Time != null && q1Time > worstQ1ofQ2) worstQ1ofQ2 = q1Time;
-        }
-      }
-      if (worstQ1ofQ2 > 0) q1CutoffTime = worstQ1ofQ2;
-    }
-
-    return {
-      q1CutoffTime,
-      q2CutoffTime,
-      segmentTimes,
-      driverLastSeg,
-      q2KnockoutPos,
-      q1KnockoutPos,
-      segBests,
-      segCount,
-    };
+    return getQualifyingCutoffs(
+      validLaps,
+      laps,
+      raceControl,
+      resultRows.map((row) => ({
+        position: row.position,
+        driverNumber: row.driver.driver_number,
+      }))
+    );
   }, [isQualifying, validLaps, laps, raceControl, resultRows]);
 
   return (

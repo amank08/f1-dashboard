@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { LapData, Position, RaceControlMessage } from "@/lib/openf1/types";
 import {
+  getQualifyingCutoffs,
   getQualifyingKnockoutPosition,
   getRetiredDrivers,
+  type QualifyingResultSnapshot,
   type ReplayTimingSnapshot,
 } from "@/lib/utils/replay-processor";
 
@@ -59,6 +61,10 @@ function lap(date_start: string, driver_number: number, lap_number: number): Lap
     segments_sector_3: [],
     st_speed: null,
   };
+}
+
+function qualiRow(position: number, driverNumber: number): QualifyingResultSnapshot {
+  return { position, driverNumber };
 }
 
 describe("getQualifyingKnockoutPosition", () => {
@@ -245,5 +251,122 @@ describe("getRetiredDrivers", () => {
     expect(retired.get(19)).toBe("Q1");
     expect(retired.get(18)).toBe("Q1");
     expect(retired.size).toBe(6);
+  });
+});
+
+describe("getQualifyingCutoffs", () => {
+  it("returns undefined when fewer than two quali segments are available", () => {
+    const raceControl = [
+      msg("2026-03-14T05:00:00.000Z", {
+        category: "SessionStatus",
+        message: "SESSION STARTED",
+      }),
+      msg("2026-03-14T05:18:00.000Z", {
+        message: "CHEQUERED FLAG",
+      }),
+    ];
+
+    expect(getQualifyingCutoffs([], [], raceControl, [])).toBeUndefined();
+  });
+
+  it("builds Q1 and Q2 cutoffs from segment bests and advancement", () => {
+    const raceControl = [
+      msg("2026-03-14T05:00:00.000Z", {
+        category: "SessionStatus",
+        message: "SESSION STARTED",
+      }),
+      msg("2026-03-14T05:18:00.000Z", {
+        message: "CHEQUERED FLAG",
+      }),
+      msg("2026-03-14T05:25:00.000Z", {
+        category: "SessionStatus",
+        message: "SESSION STARTED",
+      }),
+      msg("2026-03-14T05:40:00.000Z", {
+        message: "CHEQUERED FLAG",
+      }),
+      msg("2026-03-14T05:47:00.000Z", {
+        category: "SessionStatus",
+        message: "SESSION STARTED",
+      }),
+      msg("2026-03-14T06:00:00.000Z", {
+        message: "CHEQUERED FLAG",
+      }),
+    ];
+
+    const q1Fastest = Array.from({ length: 16 }, (_, i) => ({
+      ...lap("2026-03-14T05:05:00.000Z", i + 1, 1),
+      lap_duration: 80 + i,
+    }));
+    const q2Fastest = Array.from({ length: 10 }, (_, i) => ({
+      ...lap("2026-03-14T05:30:00.000Z", i + 1, 2),
+      lap_duration: 70 + i,
+    }));
+    const q3Presence = Array.from({ length: 5 }, (_, i) => ({
+      ...lap("2026-03-14T05:50:00.000Z", i + 1, 3),
+      lap_duration: 69 + i,
+    }));
+
+    const allLaps = [...q1Fastest, ...q2Fastest, ...q3Presence];
+    const resultRows = Array.from({ length: 16 }, (_, i) => qualiRow(i + 1, i + 1));
+
+    const cutoffs = getQualifyingCutoffs(allLaps, allLaps, raceControl, resultRows);
+
+    expect(cutoffs?.segCount).toBe(3);
+    expect(cutoffs?.q1CutoffTime).toBe(85);
+    expect(cutoffs?.q2CutoffTime).toBe(74);
+    expect(cutoffs?.q2KnockoutPos).toBe(6);
+    expect(cutoffs?.q1KnockoutPos).toBe(11);
+    expect(cutoffs?.driverLastSeg.get(6)).toBe(1);
+    expect(cutoffs?.driverLastSeg.get(11)).toBe(0);
+    expect(cutoffs?.driverLastSeg.get(1)).toBe(2);
+  });
+
+  it("promotes drivers who advanced but did not set a lap in the later segment", () => {
+    const raceControl = [
+      msg("2026-03-14T05:00:00.000Z", {
+        category: "SessionStatus",
+        message: "SESSION STARTED",
+      }),
+      msg("2026-03-14T05:18:00.000Z", {
+        message: "CHEQUERED FLAG",
+      }),
+      msg("2026-03-14T05:25:00.000Z", {
+        category: "SessionStatus",
+        message: "SESSION STARTED",
+      }),
+      msg("2026-03-14T05:40:00.000Z", {
+        message: "CHEQUERED FLAG",
+      }),
+      msg("2026-03-14T05:47:00.000Z", {
+        category: "SessionStatus",
+        message: "SESSION STARTED",
+      }),
+      msg("2026-03-14T06:00:00.000Z", {
+        message: "CHEQUERED FLAG",
+      }),
+    ];
+
+    const q1Fastest = Array.from({ length: 16 }, (_, i) => ({
+      ...lap("2026-03-14T05:05:00.000Z", i + 1, 1),
+      lap_duration: 80 + i,
+    }));
+    const q2Fastest = Array.from({ length: 10 }, (_, i) => ({
+      ...lap("2026-03-14T05:30:00.000Z", i + 1, 2),
+      lap_duration: 70 + i,
+    }));
+    const q3Presence = Array.from({ length: 4 }, (_, i) => ({
+      ...lap("2026-03-14T05:50:00.000Z", i + 1, 3),
+      lap_duration: 69 + i,
+    }));
+
+    const allLaps = [...q1Fastest, ...q2Fastest, ...q3Presence];
+    const resultRows = Array.from({ length: 16 }, (_, i) => qualiRow(i + 1, i + 1));
+
+    const cutoffs = getQualifyingCutoffs(allLaps, allLaps, raceControl, resultRows);
+
+    expect(cutoffs?.driverLastSeg.get(5)).toBe(2);
+    expect(cutoffs?.segmentTimes.has(5)).toBe(false);
+    expect(cutoffs?.q2CutoffTime).toBe(74);
   });
 });

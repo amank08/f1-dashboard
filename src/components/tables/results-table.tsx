@@ -1,6 +1,7 @@
 "use client";
 
 import type { Driver, LapData, Position, Interval, Stint, RaceControlMessage } from "@/lib/openf1/types";
+import type { QualifyingCutoffs } from "@/lib/utils/replay-processor";
 import { formatLapTime } from "@/lib/utils/formatters";
 import { getTeamColor, getTeamLogoUrl, getTeamLogoStyle } from "@/lib/utils/colors";
 import { TyreIcon } from "@/components/ui/tyre-icon";
@@ -498,18 +499,7 @@ export function ResultsTable({
 }: {
   results: ResultRow[];
   sessionType?: string;
-  qualiCutoffs?: {
-    q1CutoffTime: number | null;
-    q2CutoffTime: number | null;
-    segmentTimes: Map<number, number>;
-    /** Maps driver_number → last segment index they participated in */
-    driverLastSeg: Map<number, number>;
-    q2KnockoutPos: number | null;
-    q1KnockoutPos: number | null;
-    /** Best lap time per driver per segment (Q1=0, Q2=1, Q3=2) */
-    segBests: Map<number, number>[];
-    segCount: number;
-  };
+  qualiCutoffs?: QualifyingCutoffs;
 }) {
   const overallFastest = Math.min(
     ...results.filter((r) => r.fastestLap).map((r) => r.fastestLap!)

@@ -106,6 +106,22 @@ export interface ReplayTimingSnapshot {
   currentLap: number;
 }
 
+export interface QualifyingResultSnapshot {
+  position: number;
+  driverNumber: number;
+}
+
+export interface QualifyingCutoffs {
+  q1CutoffTime: number | null;
+  q2CutoffTime: number | null;
+  segmentTimes: Map<number, number>;
+  driverLastSeg: Map<number, number>;
+  q2KnockoutPos: number | null;
+  q1KnockoutPos: number | null;
+  segBests: Map<number, number>[];
+  segCount: number;
+}
+
 /**
  * Build session phases from race control messages.
  * Qualifying has 3 phases (Q1/Q2/Q3), practice has 1 phase.
@@ -373,6 +389,168 @@ export function getRetiredDrivers(
   }
 
   return map;
+}
+
+export function getQualifyingCutoffs(
+  validLaps: LapData[],
+  laps: LapData[],
+  raceControl: RaceControlMessage[],
+  resultRows: QualifyingResultSnapshot[]
+): QualifyingCutoffs | undefined {
+  if (resultRows.length === 0) return undefined;
+
+  const segments: { start: string; end: string }[] = [];
+  let pendingStart: string | null = null;
+  for (const msg of raceControl) {
+    if (msg.message === "SESSION STARTED" && pendingStart === null) {
+      pendingStart = msg.date;
+    }
+    if (msg.message === "CHEQUERED FLAG" && pendingStart !== null) {
+      segments.push({ start: pendingStart, end: msg.date });
+      pendingStart = null;
+    }
+  }
+
+  const segCount = Math.min(segments.length, 3);
+  if (segCount < 2) return undefined;
+
+  const starts = segments.map((s) => s.start);
+  const ends = segments.map((s) => s.end);
+
+  function bestInSegment(
+    segStart: string,
+    segEnd: string,
+    nextSegStart?: string
+  ): Map<number, number> {
+    const best = new Map<number, number>();
+    let segFastest = Infinity;
+    const boundary = nextSegStart ?? segEnd;
+
+    for (const lap of validLaps) {
+      if (!lap.lap_duration || lap.is_pit_out_lap) continue;
+      if (
+        lap.date_start >= segStart &&
+        lap.date_start < boundary &&
+        lap.lap_duration < segFastest
+      ) {
+        segFastest = lap.lap_duration;
+      }
+    }
+
+    const segThreshold = isFinite(segFastest) ? segFastest * 1.07 : Infinity;
+    for (const lap of validLaps) {
+      if (!lap.lap_duration || lap.is_pit_out_lap) continue;
+      if (lap.lap_duration > segThreshold) continue;
+      if (lap.date_start >= segStart && lap.date_start < boundary) {
+        const cur = best.get(lap.driver_number);
+        if (!cur || lap.lap_duration < cur) {
+          best.set(lap.driver_number, lap.lap_duration);
+        }
+      }
+    }
+
+    return best;
+  }
+
+  const segBests: Map<number, number>[] = [];
+  for (let i = 0; i < segCount; i++) {
+    segBests.push(bestInSegment(starts[i], ends[i], starts[i + 1]));
+  }
+
+  const driverLastSeg = new Map<number, number>();
+  for (const row of resultRows) {
+    for (let s = segCount - 1; s >= 0; s--) {
+      const segStart = starts[s];
+      const boundary = starts[s + 1] ?? ends[s];
+      const hasLap = laps.some(
+        (l) =>
+          l.driver_number === row.driverNumber &&
+          l.date_start >= segStart &&
+          l.date_start < boundary
+      );
+      if (hasLap) {
+        driverLastSeg.set(row.driverNumber, s);
+        break;
+      }
+    }
+  }
+
+  const advancement = [15, 10];
+  for (let s = 0; s < segCount - 1; s++) {
+    const times = [...segBests[s].entries()].sort((a, b) => a[1] - b[1]);
+    const advanceCount = advancement[s] ?? 10;
+    const advancedDrivers = times.slice(0, advanceCount).map(([dNum]) => dNum);
+    for (const dNum of advancedDrivers) {
+      const cur = driverLastSeg.get(dNum);
+      if (cur === undefined || cur <= s) {
+        driverLastSeg.set(dNum, s + 1);
+      }
+    }
+  }
+
+  for (const row of resultRows) {
+    if (!driverLastSeg.has(row.driverNumber)) {
+      driverLastSeg.set(row.driverNumber, 0);
+    }
+  }
+
+  const segmentTimes = new Map<number, number>();
+  for (const row of resultRows) {
+    const seg = driverLastSeg.get(row.driverNumber);
+    if (seg != null) {
+      const t = segBests[seg].get(row.driverNumber);
+      if (t != null) segmentTimes.set(row.driverNumber, t);
+    }
+  }
+
+  const sortedByPos = [...resultRows].sort((a, b) => a.position - b.position);
+  let q2KnockoutPos: number | null = null;
+  let q1KnockoutPos: number | null = null;
+  for (const row of sortedByPos) {
+    const seg = driverLastSeg.get(row.driverNumber);
+    if (seg === segCount - 2 && q2KnockoutPos === null) {
+      q2KnockoutPos = row.position;
+    }
+    if (seg === 0 && q1KnockoutPos === null && segCount >= 2) {
+      q1KnockoutPos = row.position;
+    }
+  }
+
+  let q2CutoffTime: number | null = null;
+  let q1CutoffTime: number | null = null;
+
+  if (segCount >= 3) {
+    let worstQ2ofQ3 = -Infinity;
+    for (const [dNum, seg] of driverLastSeg) {
+      if (seg === segCount - 1) {
+        const q2Time = segBests[segCount - 2].get(dNum);
+        if (q2Time != null && q2Time > worstQ2ofQ3) worstQ2ofQ3 = q2Time;
+      }
+    }
+    if (worstQ2ofQ3 > 0) q2CutoffTime = worstQ2ofQ3;
+  }
+
+  if (segCount >= 2) {
+    let worstQ1ofQ2 = -Infinity;
+    for (const [dNum, seg] of driverLastSeg) {
+      if (seg >= 1) {
+        const q1Time = segBests[0].get(dNum);
+        if (q1Time != null && q1Time > worstQ1ofQ2) worstQ1ofQ2 = q1Time;
+      }
+    }
+    if (worstQ1ofQ2 > 0) q1CutoffTime = worstQ1ofQ2;
+  }
+
+  return {
+    q1CutoffTime,
+    q2CutoffTime,
+    segmentTimes,
+    driverLastSeg,
+    q2KnockoutPos,
+    q1KnockoutPos,
+    segBests,
+    segCount,
+  };
 }
 
 function formatMs(ms: number): string {
