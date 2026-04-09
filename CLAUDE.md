@@ -87,11 +87,38 @@ All colours are defined in `src/app/globals.css` as CSS custom properties and ex
 ## Development Workflow
 
 ```bash
-npm run dev       # Start dev server
-npm run build     # Production build
-npm run lint      # ESLint
-npm run test      # Vitest (unit tests)
-npm run pipeline  # Run data pipeline scripts
+npm run dev            # Start dev server
+npm run build          # Production build
+npm run lint           # ESLint
+npm run test           # Vitest (unit tests)
+npm run test:coverage  # Vitest with coverage (run before pushing a PR branch)
+npm run pipeline       # Run data pipeline scripts
 ```
 
-CI runs lint + build on every push and PR to `main`. Vercel auto-deploys on merge.
+CI runs parallel `lint` and `test` jobs on every push; `build` is gated on both passing. Vercel auto-deploys on merge to `main`.
+
+### Process
+
+- **Issue first:** Always create a GitHub issue before starting a feature or bug fix. Implement only when told "implement issue #N".
+- **Small fixes / style changes:** Push directly to `main` — no branch or PR needed.
+- **Features and bugs:** Issue → branch (`feat/`, `fix/`, `style/`, `chore/`, `refactor/` prefix) → run `npm run test:coverage` → PR with `Closes #N` in the body → merge.
+
+### Commit style
+
+Use [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+feat: add qualifying timer freeze on red flag
+fix: remove duplicate Bearman entry in timing board
+style: center numeric columns in timing board
+chore: update CI to parallel lint/test jobs
+refactor: extract buildPhase helper in replay-processor
+```
+
+- No `Co-Authored-By` lines — do not attribute commits to Claude.
+- No scope parentheses required (e.g. `feat:` not `feat(live):`).
+
+### Known data quirks (OpenF1)
+
+- Some drivers have **no position data** in OpenF1 qualifying (e.g. STR, SAI in 2026 Australian GP). They participate but GPS telemetry is absent. Treat them as normal entrants — append to timing board at the bottom and knock them out of Q1 at the same time as other Q1 eliminations.
+- OpenF1 sometimes returns **duplicate driver entries** for a session (e.g. two `#87 BEA` entries in 2026 Australian GP qualifying). Guard against duplicates when building driver lists.
