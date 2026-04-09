@@ -398,6 +398,13 @@ export default function SessionAnalysisPage() {
         }
       }
 
+      // DNS: drivers with no position data anywhere in the session
+      for (const e of replayTimingEntries) {
+        if (!map.has(e.driverNumber) && !positions.some((p) => p.driver_number === e.driverNumber)) {
+          map.set(e.driverNumber, "DNS");
+        }
+      }
+
       return map;
     }
 
@@ -420,6 +427,12 @@ export default function SessionAnalysisPage() {
     }
 
     for (const e of replayTimingEntries) {
+      if (map.has(e.driverNumber)) continue;
+      // DNS: never appeared in position data
+      if (positions && !positions.some((p) => p.driver_number === e.driverNumber)) {
+        map.set(e.driverNumber, "DNS");
+        continue;
+      }
       if (e.position === 1) continue;
       if (e.currentLap >= dnfThreshold) continue;
       const lastStart = latestLapStart.get(e.driverNumber);

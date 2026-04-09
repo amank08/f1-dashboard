@@ -294,7 +294,33 @@ export function buildTimingData(
     });
   }
 
-  return entries.sort((a, b) => a.position - b.position);
+  const sorted = entries.sort((a, b) => a.position - b.position);
+
+  // Append drivers with no position data at all (DNS) at the end
+  let nextPos = (sorted[sorted.length - 1]?.position ?? 0) + 1;
+  for (const driver of drivers) {
+    if (!latestPos.has(driver.driver_number)) {
+      sorted.push({
+        position: nextPos++,
+        driverNumber: driver.driver_number,
+        acronym: driver.name_acronym,
+        teamColour: driver.team_colour,
+        teamName: driver.team_name,
+        interval: null,
+        gapToLeader: null,
+        lastLap: null,
+        bestLap: null,
+        compound: null,
+        pitCount: 0,
+        sectorTimes: [null, null, null],
+        segments: [[], [], []],
+        personalBestSectors: { s1: null, s2: null, s3: null },
+        currentLap: 0,
+      });
+    }
+  }
+
+  return sorted;
 }
 
 function MiniSectors({ segments }: { segments: (number | null)[][] }) {
