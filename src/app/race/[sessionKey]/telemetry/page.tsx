@@ -23,17 +23,13 @@ export default function TelemetryPage({
 
   const { data: sessions } = useSession(sessionKeyNum);
   const { data: drivers, isLoading: driversLoading } = useDrivers(sessionKeyNum);
+  const effectiveSelectedDriver = selectedDriver ?? drivers?.[0]?.driver_number ?? null;
   const { data: carData, isLoading: carDataLoading } = useCarData(
     sessionKeyNum,
-    selectedDriver
+    effectiveSelectedDriver
   );
 
   const session = sessions?.[0];
-
-  // Auto-select first driver
-  if (!selectedDriver && drivers && drivers.length > 0 && !driversLoading) {
-    setSelectedDriver(drivers[0].driver_number);
-  }
 
   return (
     <div className="space-y-6">
@@ -61,7 +57,7 @@ export default function TelemetryPage({
           </p>
           <DriverSelector
             drivers={drivers}
-            selected={selectedDriver ? [selectedDriver] : []}
+            selected={effectiveSelectedDriver ? [effectiveSelectedDriver] : []}
             onChange={(nums) => setSelectedDriver(nums[0] ?? null)}
             max={1}
           />
@@ -83,14 +79,14 @@ export default function TelemetryPage({
         </div>
       )}
 
-      {!carDataLoading && !selectedDriver && (
+      {!carDataLoading && !effectiveSelectedDriver && (
         <EmptyState
           title="Select a driver"
           description="Choose a driver to view their telemetry data."
         />
       )}
 
-      {!carDataLoading && selectedDriver && carData && carData.length === 0 && (
+      {!carDataLoading && effectiveSelectedDriver && carData && carData.length === 0 && (
         <EmptyState
           title="No telemetry data"
           description="Telemetry data is not available for this driver in this session."

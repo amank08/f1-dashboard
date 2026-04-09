@@ -238,6 +238,35 @@ export function getPhaseLabel(
   return "Session ended";
 }
 
+export function getQualifyingKnockoutPosition(
+  raceControl: RaceControlMessage[],
+  replayTime: number | null
+): number | undefined {
+  if (replayTime == null) return undefined;
+
+  const cutoff = new Date(replayTime).toISOString();
+  let phasesStarted = 0;
+  let seenChequeredSinceLastStart = false;
+
+  const sorted = [...raceControl]
+    .filter((m) => m.date <= cutoff)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  for (const msg of sorted) {
+    if (msg.flag === "CHEQUERED") seenChequeredSinceLastStart = true;
+    if (msg.category === "SessionStatus" && msg.message === "SESSION STARTED") {
+      if (phasesStarted === 0 || seenChequeredSinceLastStart) {
+        phasesStarted++;
+        seenChequeredSinceLastStart = false;
+      }
+    }
+  }
+
+  if (phasesStarted === 1) return 16;
+  if (phasesStarted === 2) return 10;
+  return undefined;
+}
+
 function formatMs(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const m = Math.floor(totalSeconds / 60);

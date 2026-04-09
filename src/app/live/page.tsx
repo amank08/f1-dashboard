@@ -30,6 +30,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils/cn";
 import { getPositionChanges } from "@/lib/utils/analytics";
 import { countryFlagUrl } from "@/lib/utils/formatters";
+import { getQualifyingKnockoutPosition } from "@/lib/utils/replay-processor";
 import { CustomSelect } from "@/components/ui/custom-select";
 import type { Session } from "@/lib/openf1/types";
 
@@ -446,33 +447,8 @@ export default function SessionAnalysisPage() {
   // In Q3 or after elimination is finalized, no knockout zone.
   const qualiKnockoutPos = useMemo(() => {
     if (!isQuali || !raceControl || replayTime == null) return undefined;
-    const cutoff = new Date(replayTime).toISOString();
-
-    // Count phase-starting SESSION STARTEDs (i.e. not red-flag resumptions).
-    // A SESSION STARTED is a new phase start only if it is the very first one
-    // seen, or if a CHEQUERED FLAG has appeared since the previous phase start.
-    let phasesStarted = 0;
-    let seenChequeredSinceLastStart = false;
-    const sorted = [...raceControl]
-      .filter((m) => m.date <= cutoff)
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    for (const msg of sorted) {
-      if (msg.flag === "CHEQUERED") seenChequeredSinceLastStart = true;
-      if (msg.category === "SessionStatus" && msg.message === "SESSION STARTED") {
-        if (phasesStarted === 0 || seenChequeredSinceLastStart) {
-          phasesStarted++;
-          seenChequeredSinceLastStart = false;
-        }
-      }
-    }
-
-    // Between Q1 start and Q2 start (includes flying laps after 00:00): P17+ in knockout zone
-    if (phasesStarted === 1) return 16;
-    // Between Q2 start and Q3 start (includes flying laps after 00:00): P11+ in knockout zone
-    if (phasesStarted === 2) return 10;
-    // Q3 or session over → no knockout zone
-    return undefined;
-  }, [isQuali, raceControl, replayTime, replayTimingEntries.length]);
+    return getQualifyingKnockoutPosition(raceControl, replayTime);
+  }, [isQuali, raceControl, replayTime]);
 
   const replayRaceControl = useMemo(() => {
     if (!replayTime || !raceControl) return raceControl ?? [];
