@@ -439,18 +439,28 @@ export default function SessionAnalysisPage() {
     if (!isQuali || !raceControl || replayTime == null) return undefined;
     const cutoff = new Date(replayTime).toISOString();
 
-    // Count SESSION STARTED messages to determine current phase
-    let starts = 0;
-    for (const msg of raceControl) {
-      if (msg.date > cutoff) continue;
-      if (msg.category !== "SessionStatus") continue;
-      if (msg.message === "SESSION STARTED") starts++;
+    // Count phase-starting SESSION STARTEDs (i.e. not red-flag resumptions).
+    // A SESSION STARTED is a new phase start only if it is the very first one
+    // seen, or if a CHEQUERED FLAG has appeared since the previous phase start.
+    let phasesStarted = 0;
+    let seenChequeredSinceLastStart = false;
+    const sorted = [...raceControl]
+      .filter((m) => m.date <= cutoff)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    for (const msg of sorted) {
+      if (msg.flag === "CHEQUERED") seenChequeredSinceLastStart = true;
+      if (msg.category === "SessionStatus" && msg.message === "SESSION STARTED") {
+        if (phasesStarted === 0 || seenChequeredSinceLastStart) {
+          phasesStarted++;
+          seenChequeredSinceLastStart = false;
+        }
+      }
     }
 
     // Between Q1 start and Q2 start (includes flying laps after 00:00): P17+ in knockout zone
-    if (starts === 1) return 16;
+    if (phasesStarted === 1) return 16;
     // Between Q2 start and Q3 start (includes flying laps after 00:00): P11+ in knockout zone
-    if (starts === 2) return 10;
+    if (phasesStarted === 2) return 10;
     // Q3 or session over → no knockout zone
     return undefined;
   }, [isQuali, raceControl, replayTime, replayTimingEntries.length]);

@@ -91,33 +91,47 @@ export interface SessionPhase {
   label: string;   // "Q1", "Q2", "Q3", "SQ1", "SQ2", "SQ3", "Session"
   start: number;   // ms timestamp
   end: number;     // ms timestamp
+  /** Red flag pause intervals within this phase (SESSION ABORTED → SESSION STARTED). */
+  pauses: Array<{ from: number; to: number }>;
 }
 
 /**
  * Build session phases from race control messages.
  * Qualifying has 3 phases (Q1/Q2/Q3), practice has 1 phase.
- * Phases are delimited by SESSION STARTED / CHEQUERED FLAG pairs.
+ * Phases are delimited by the first SESSION STARTED (per phase) and CHEQUERED FLAG.
+ * Red flag pauses (SESSION ABORTED → SESSION STARTED) are collected per phase.
  */
 export function buildSessionPhases(
   raceControl: RaceControlMessage[],
   sessionType: string
 ): SessionPhase[] {
-  // Find all SESSION STARTED and CHEQUERED FLAG timestamps in order
-  const starts: number[] = [];
-  const ends: number[] = [];
-
   const sorted = [...raceControl].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   );
 
-  for (const msg of sorted) {
-    if (msg.category === "SessionStatus" && msg.message === "SESSION STARTED") {
-      starts.push(new Date(msg.date).getTime());
+  // Build phase boundaries: each phase starts at the first SESSION STARTED
+  // after the previous CHEQUERED FLAG (red-flag resumptions are not phase starts).
+  // Pauses within a phase are SESSION ABORTED → next SESSION STARTED pairs.
+  const buildPhase = (label: string, start: number, end: number): SessionPhase => {
+    const pauses: Array<{ from: number; to: number }> = [];
+    for (const msg of sorted) {
+      const t = new Date(msg.date).getTime();
+      if (t <= start || t >= end) continue;
+      if (msg.category === "SessionStatus" && msg.message === "SESSION ABORTED") {
+        const resumeMsg = sorted.find(
+          (m) =>
+            new Date(m.date).getTime() > t &&
+            new Date(m.date).getTime() <= end &&
+            m.category === "SessionStatus" &&
+            m.message === "SESSION STARTED"
+        );
+        if (resumeMsg) {
+          pauses.push({ from: t, to: new Date(resumeMsg.date).getTime() });
+        }
+      }
     }
-    if (msg.flag === "CHEQUERED") {
-      ends.push(new Date(msg.date).getTime());
-    }
-  }
+    return { label, start, end, pauses };
+  };
 
   const isQualifying = sessionType === "Qualifying";
   const isSprintQualifying = sessionType === "Sprint Qualifying";
@@ -125,20 +139,37 @@ export function buildSessionPhases(
   if (isQualifying || isSprintQualifying) {
     const prefix = isSprintQualifying ? "SQ" : "Q";
     const phases: SessionPhase[] = [];
-    const count = Math.min(starts.length, ends.length, 3);
-    for (let i = 0; i < count; i++) {
-      phases.push({
-        label: `${prefix}${i + 1}`,
-        start: starts[i],
-        end: ends[i],
-      });
+    let searchAfter = 0;
+    let phaseNum = 1;
+
+    for (const msg of sorted) {
+      if (phases.length >= 3) break;
+      const t = new Date(msg.date).getTime();
+      if (msg.flag === "CHEQUERED" && t > searchAfter) {
+        // Find the first SESSION STARTED that begins this phase
+        const startMsg = sorted.find(
+          (m) =>
+            new Date(m.date).getTime() > searchAfter &&
+            new Date(m.date).getTime() < t &&
+            m.category === "SessionStatus" &&
+            m.message === "SESSION STARTED"
+        );
+        if (startMsg) {
+          phases.push(buildPhase(`${prefix}${phaseNum++}`, new Date(startMsg.date).getTime(), t));
+          searchAfter = t;
+        }
+      }
     }
     return phases;
   }
 
   // Practice or other: single phase
-  if (starts.length > 0 && ends.length > 0) {
-    return [{ label: "Session", start: starts[0], end: ends[0] }];
+  const firstStart = sorted.find(
+    (m) => m.category === "SessionStatus" && m.message === "SESSION STARTED"
+  );
+  const firstEnd = sorted.find((m) => m.flag === "CHEQUERED");
+  if (firstStart && firstEnd) {
+    return [buildPhase("Session", new Date(firstStart.date).getTime(), new Date(firstEnd.date).getTime())];
   }
 
   return [];
@@ -157,11 +188,20 @@ export function getPhaseLabel(
 ): string {
   if (phases.length === 0) return "";
 
-  // Active phase: count down to chequered
+  // Active phase: count down to chequered, freezing during red flag pauses
   for (const phase of phases) {
     if (currentTime >= phase.start && currentTime <= phase.end) {
-      const remaining = phase.end - currentTime;
       const prefix = phase.label !== "Session" ? `${phase.label} — ` : "";
+      // If currently in a red flag pause, freeze at the abort time
+      const activePause = phase.pauses.find(
+        (p) => currentTime >= p.from && currentTime < p.to
+      );
+      const activeTime = activePause ? activePause.from : currentTime;
+      // Subtract durations of pauses that haven't started yet (from activeTime onward)
+      const pauseAfter = phase.pauses
+        .filter((p) => p.from >= activeTime)
+        .reduce((sum, p) => sum + (p.to - p.from), 0);
+      const remaining = phase.end - activeTime - pauseAfter;
       return `${prefix}${formatMs(remaining)}`;
     }
   }
