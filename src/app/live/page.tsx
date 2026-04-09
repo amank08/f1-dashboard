@@ -30,7 +30,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils/cn";
 import { getPositionChanges } from "@/lib/utils/analytics";
 import { countryFlagUrl } from "@/lib/utils/formatters";
-import { getQualifyingKnockoutPosition } from "@/lib/utils/replay-processor";
+import {
+  getQualifyingKnockoutPosition,
+  getRetiredDrivers,
+} from "@/lib/utils/replay-processor";
 import { CustomSelect } from "@/components/ui/custom-select";
 import type { Session } from "@/lib/openf1/types";
 
@@ -342,104 +345,14 @@ export default function SessionAnalysisPage() {
   // Race: DNF if lap count <90% of leader and no recent laps (3 min).
   // Qualifying: eliminated if knocked out of Q1/Q2.
   const retiredDrivers = useMemo(() => {
-    const map = new Map<number, string>();
-    if (!replayTimingEntries || replayTimingEntries.length === 0) return map;
-
-    if (isQuali && raceControl && replayTime != null && positions) {
-      // Qualifying has 3 SESSION FINISHED messages (Q1, Q2, Q3).
-      // Add 90s buffer so drivers can finish flying laps before
-      // we snapshot eliminations.
-      const cutoff = new Date(replayTime).toISOString();
-      const finishedTimes: number[] = [];
-
-      for (const msg of raceControl) {
-        if (msg.date > cutoff) continue;
-        if (msg.category === "SessionStatus" && msg.message === "SESSION FINISHED") {
-          finishedTimes.push(new Date(msg.date).getTime() + 90_000);
-        }
-      }
-
-      const q1EndTime = finishedTimes[0] ?? null;
-      const q2EndTime = finishedTimes[1] ?? null;
-
-      // Snapshot positions at a given time to find the bottom N
-      const positionsAt = (time: number): Map<number, number> => {
-        const latest = new Map<number, { pos: number; date: number }>();
-        for (const p of positions) {
-          const t = new Date(p.date).getTime();
-          if (t > time) continue;
-          const prev = latest.get(p.driver_number);
-          if (!prev || t > prev.date) {
-            latest.set(p.driver_number, { pos: p.position, date: t });
-          }
-        }
-        return new Map([...latest].map(([dn, v]) => [dn, v.pos]));
-      };
-
-      // After Q1 + buffer: bottom 6 total are eliminated.
-      // No-data drivers count toward the 6 — not added on top.
-      if (q1EndTime && replayTime >= q1EndTime) {
-        const noData = replayTimingEntries.filter(
-          (e) => !positions.some((p) => p.driver_number === e.driverNumber)
-        );
-        for (const e of noData) map.set(e.driverNumber, "Q1");
-        const q1Pos = positionsAt(q1EndTime);
-        const sorted = [...q1Pos.entries()].sort((a, b) => a[1] - b[1]);
-        const remaining = Math.max(0, 6 - noData.length);
-        for (const [dn] of sorted.slice(-remaining)) map.set(dn, "Q1");
-      }
-
-      // After Q2 + buffer: next bottom 6 (of remaining) are eliminated
-      if (q2EndTime && replayTime >= q2EndTime) {
-        const q2Pos = positionsAt(q2EndTime);
-        // Exclude Q1-eliminated drivers
-        const remaining = [...q2Pos.entries()]
-          .filter(([dn]) => !map.has(dn))
-          .sort((a, b) => a[1] - b[1]);
-        const eliminated = remaining.slice(-6);
-        for (const [dn] of eliminated) {
-          map.set(dn, "Q2");
-        }
-      }
-
-      return map;
-    }
-
-    // Race/Sprint: DNF detection
-    const leaderEntry = replayTimingEntries.find((e) => e.position === 1);
-    const leaderLap = leaderEntry?.currentLap ?? 0;
-    const dnfThreshold = Math.floor(leaderLap * 0.9);
-    if (leaderLap <= 2) return map;
-
-    const latestLapStart = new Map<number, number>();
-    if (laps && replayTime != null) {
-      const cutoff = replayTime;
-      for (const l of laps) {
-        const t = new Date(l.date_start).getTime();
-        if (t <= cutoff) {
-          const prev = latestLapStart.get(l.driver_number) ?? 0;
-          if (t > prev) latestLapStart.set(l.driver_number, t);
-        }
-      }
-    }
-
-    for (const e of replayTimingEntries) {
-      if (map.has(e.driverNumber)) continue;
-      // DNS: never appeared in position data
-      if (positions && !positions.some((p) => p.driver_number === e.driverNumber)) {
-        map.set(e.driverNumber, "DNS");
-        continue;
-      }
-      if (e.position === 1) continue;
-      if (e.currentLap >= dnfThreshold) continue;
-      const lastStart = latestLapStart.get(e.driverNumber);
-      if (replayTime != null && lastStart != null) {
-        const staleness = replayTime - lastStart;
-        if (staleness < 180_000) continue;
-      }
-      map.set(e.driverNumber, "OUT");
-    }
-    return map;
+    return getRetiredDrivers(
+      replayTimingEntries,
+      laps ?? [],
+      replayTime,
+      isQuali,
+      raceControl ?? [],
+      positions ?? []
+    );
   }, [replayTimingEntries, laps, replayTime, isQuali, raceControl, positions]);
 
   // Knockout zone: position at which drivers are in danger of elimination.

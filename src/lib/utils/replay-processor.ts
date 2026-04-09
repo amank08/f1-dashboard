@@ -1,4 +1,9 @@
-import type { LapData, RaceControlMessage, ReplaySnapshot } from "@/lib/openf1/types";
+import type {
+  LapData,
+  Position,
+  RaceControlMessage,
+  ReplaySnapshot,
+} from "@/lib/openf1/types";
 
 /**
  * Binary-search each driver's parallel-array track in a `ReplaySnapshot`
@@ -93,6 +98,12 @@ export interface SessionPhase {
   end: number;     // ms timestamp
   /** Red flag pause intervals within this phase (SESSION ABORTED → SESSION STARTED). */
   pauses: Array<{ from: number; to: number }>;
+}
+
+export interface ReplayTimingSnapshot {
+  position: number;
+  driverNumber: number;
+  currentLap: number;
 }
 
 /**
@@ -265,6 +276,103 @@ export function getQualifyingKnockoutPosition(
   if (phasesStarted === 1) return 16;
   if (phasesStarted === 2) return 10;
   return undefined;
+}
+
+export function getRetiredDrivers(
+  replayTimingEntries: ReplayTimingSnapshot[],
+  laps: LapData[],
+  replayTime: number | null,
+  isQualifyingSession: boolean,
+  raceControl: RaceControlMessage[],
+  positions: Position[]
+): Map<number, string> {
+  const map = new Map<number, string>();
+  if (replayTimingEntries.length === 0) return map;
+
+  if (isQualifyingSession && replayTime != null) {
+    const cutoff = new Date(replayTime).toISOString();
+    const finishedTimes: number[] = [];
+
+    for (const msg of raceControl) {
+      if (msg.date > cutoff) continue;
+      if (msg.category === "SessionStatus" && msg.message === "SESSION FINISHED") {
+        finishedTimes.push(new Date(msg.date).getTime() + 90_000);
+      }
+    }
+
+    const q1EndTime = finishedTimes[0] ?? null;
+    const q2EndTime = finishedTimes[1] ?? null;
+
+    const positionsAt = (time: number): Map<number, number> => {
+      const latest = new Map<number, { pos: number; date: number }>();
+      for (const p of positions) {
+        const t = new Date(p.date).getTime();
+        if (t > time) continue;
+        const prev = latest.get(p.driver_number);
+        if (!prev || t > prev.date) {
+          latest.set(p.driver_number, { pos: p.position, date: t });
+        }
+      }
+      return new Map([...latest].map(([dn, v]) => [dn, v.pos]));
+    };
+
+    if (q1EndTime && replayTime >= q1EndTime) {
+      const noData = replayTimingEntries.filter(
+        (e) => !positions.some((p) => p.driver_number === e.driverNumber)
+      );
+      for (const e of noData) map.set(e.driverNumber, "Q1");
+      const q1Pos = positionsAt(q1EndTime);
+      const sorted = [...q1Pos.entries()].sort((a, b) => a[1] - b[1]);
+      const remaining = Math.max(0, 6 - noData.length);
+      for (const [dn] of sorted.slice(-remaining)) map.set(dn, "Q1");
+    }
+
+    if (q2EndTime && replayTime >= q2EndTime) {
+      const q2Pos = positionsAt(q2EndTime);
+      const remaining = [...q2Pos.entries()]
+        .filter(([dn]) => !map.has(dn))
+        .sort((a, b) => a[1] - b[1]);
+      for (const [dn] of remaining.slice(-6)) {
+        map.set(dn, "Q2");
+      }
+    }
+
+    return map;
+  }
+
+  const leaderEntry = replayTimingEntries.find((e) => e.position === 1);
+  const leaderLap = leaderEntry?.currentLap ?? 0;
+  const dnfThreshold = Math.floor(leaderLap * 0.9);
+  if (leaderLap <= 2) return map;
+
+  const latestLapStart = new Map<number, number>();
+  if (replayTime != null) {
+    for (const l of laps) {
+      const t = new Date(l.date_start).getTime();
+      if (t <= replayTime) {
+        const prev = latestLapStart.get(l.driver_number) ?? 0;
+        if (t > prev) latestLapStart.set(l.driver_number, t);
+      }
+    }
+  }
+
+  for (const e of replayTimingEntries) {
+    if (map.has(e.driverNumber)) continue;
+    if (!positions.some((p) => p.driver_number === e.driverNumber)) {
+      map.set(e.driverNumber, "DNS");
+      continue;
+    }
+    if (e.position === 1) continue;
+    if (e.currentLap >= dnfThreshold) continue;
+    const lastStart = latestLapStart.get(e.driverNumber);
+    if (replayTime != null && lastStart != null) {
+      const staleness = replayTime - lastStart;
+      if (staleness < 180_000) continue;
+    }
+    map.set(e.driverNumber, "OUT");
+  }
+
+  return map;
 }
 
 function formatMs(ms: number): string {
