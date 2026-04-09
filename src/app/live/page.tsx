@@ -375,20 +375,17 @@ export default function SessionAnalysisPage() {
         return new Map([...latest].map(([dn, v]) => [dn, v.pos]));
       };
 
-      // After Q1 + buffer: bottom 6 are eliminated, plus any no-data drivers
+      // After Q1 + buffer: bottom 6 total are eliminated.
+      // No-data drivers count toward the 6 — not added on top.
       if (q1EndTime && replayTime >= q1EndTime) {
+        const noData = replayTimingEntries.filter(
+          (e) => !positions.some((p) => p.driver_number === e.driverNumber)
+        );
+        for (const e of noData) map.set(e.driverNumber, "Q1");
         const q1Pos = positionsAt(q1EndTime);
         const sorted = [...q1Pos.entries()].sort((a, b) => a[1] - b[1]);
-        const eliminated = sorted.slice(-6);
-        for (const [dn] of eliminated) {
-          map.set(dn, "Q1");
-        }
-        // Drivers with no position data never participated — knock out with Q1
-        for (const e of replayTimingEntries) {
-          if (!map.has(e.driverNumber) && !positions.some((p) => p.driver_number === e.driverNumber)) {
-            map.set(e.driverNumber, "Q1");
-          }
-        }
+        const remaining = Math.max(0, 6 - noData.length);
+        for (const [dn] of sorted.slice(-remaining)) map.set(dn, "Q1");
       }
 
       // After Q2 + buffer: next bottom 6 (of remaining) are eliminated
