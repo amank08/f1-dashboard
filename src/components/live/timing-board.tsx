@@ -296,10 +296,13 @@ export function buildTimingData(
 
   const sorted = entries.sort((a, b) => a.position - b.position);
 
-  // Append drivers with no position data at all (DNS) at the end
+  // Append drivers with no position data at all (DNS) at the end.
+  // Guard against duplicate driver entries in OpenF1 data (e.g. AUS 2026 Q).
+  const appendedDrivers = new Set<number>();
   let nextPos = (sorted[sorted.length - 1]?.position ?? 0) + 1;
   for (const driver of drivers) {
-    if (!latestPos.has(driver.driver_number)) {
+    if (!latestPos.has(driver.driver_number) && !appendedDrivers.has(driver.driver_number)) {
+      appendedDrivers.add(driver.driver_number);
       sorted.push({
         position: nextPos++,
         driverNumber: driver.driver_number,
