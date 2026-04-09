@@ -398,13 +398,6 @@ export default function SessionAnalysisPage() {
         }
       }
 
-      // DNS: drivers with no position data anywhere in the session
-      for (const e of replayTimingEntries) {
-        if (!map.has(e.driverNumber) && !positions.some((p) => p.driver_number === e.driverNumber)) {
-          map.set(e.driverNumber, "DNS");
-        }
-      }
-
       return map;
     }
 
