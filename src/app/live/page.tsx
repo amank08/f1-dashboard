@@ -398,6 +398,13 @@ export default function SessionAnalysisPage() {
         }
       }
 
+      // Drivers with no position data at all never participated — always Q1 out
+      for (const e of replayTimingEntries) {
+        if (!map.has(e.driverNumber) && !positions.some((p) => p.driver_number === e.driverNumber)) {
+          map.set(e.driverNumber, "Q1");
+        }
+      }
+
       return map;
     }
 
