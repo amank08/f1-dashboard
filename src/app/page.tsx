@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { Timer } from "lucide-react";
 import { useMeetings } from "@/lib/hooks/use-meetings";
@@ -44,7 +45,14 @@ export default function Home() {
             Formula 1 Dashboard
           </p>
           <div className="mt-4">
-            <img src="/logo.svg" alt="Undercut" className="h-16 sm:h-20 lg:h-24" />
+            <Image
+              src="/logo.svg"
+              alt="Undercut"
+              width={360}
+              height={96}
+              className="h-16 w-auto sm:h-20 lg:h-24"
+              priority
+            />
           </div>
           <p className="mt-4 max-w-lg text-lg text-f1-text-secondary">
             Explore race data, lap times, pit strategies, telemetry,

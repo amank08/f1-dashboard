@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import Link from "next/link";
 import { format, parseISO, isPast, isFuture, isWithinInterval } from "date-fns";
@@ -89,9 +90,11 @@ export default function CalendarPage() {
                   </div>
 
                   {/* Flag */}
-                  <img
+                  <Image
                     src={countryFlagUrl(meeting.country_code)}
                     alt={meeting.country_name}
+                    width={20}
+                    height={14}
                     className="h-5 w-auto shrink-0 rounded-sm"
                   />
 

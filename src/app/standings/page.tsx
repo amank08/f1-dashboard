@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { SeasonSelector } from "@/components/selectors/season-selector";
 import { PageHeader } from "@/components/layout/page-header";
@@ -18,9 +19,11 @@ function TeamIcon({ teamColour, teamName }: { teamColour: string; teamName: stri
       style={{ backgroundColor: color }}
     >
       {logoUrl && (
-        <img
+        <Image
           src={logoUrl}
           alt={teamName}
+          width={16}
+          height={16}
           className="h-4 w-4 object-contain"
           style={getTeamLogoStyle(teamName)}
         />
@@ -116,9 +119,11 @@ export default function StandingsPage() {
                           style={{ backgroundColor: "var(--f1-card)" }}
                         >
                           {headshotHiRes(driver.headshotUrl, driver.team, year) ? (
-                            <img
+                            <Image
                               src={headshotHiRes(driver.headshotUrl, driver.team, year)!}
                               alt={driver.name}
+                              fill
+                              sizes="48px"
                               className="h-full w-full object-cover object-top"
                             />
                           ) : (

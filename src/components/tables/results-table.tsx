@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { Driver, LapData, Position, Interval, Stint, RaceControlMessage } from "@/lib/openf1/types";
 import type { QualifyingCutoffs } from "@/lib/utils/replay-processor";
 import { formatLapTime } from "@/lib/utils/formatters";
@@ -459,9 +460,11 @@ function DriverCell({ driver, size = "sm" }: { driver: Driver; size?: "sm" | "md
         style={{ backgroundColor: getTeamColor(driver.team_colour, driver.team_name) }}
       >
         {logoUrl && (
-          <img
+          <Image
             src={logoUrl}
             alt={driver.team_name}
+            width={16}
+            height={16}
             className="h-4 w-4 object-contain"
             style={getTeamLogoStyle(driver.team_name)}
           />

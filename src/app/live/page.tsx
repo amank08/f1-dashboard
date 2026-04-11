@@ -14,7 +14,7 @@ import { useRaceControl } from "@/lib/hooks/use-race-control";
 import { PageHeader } from "@/components/layout/page-header";
 import { SeasonSelector } from "@/components/selectors/season-selector";
 import { ResultsTable, buildResults } from "@/components/tables/results-table";
-import { TimingBoard, buildTimingData } from "@/components/live/timing-board";
+import { TimingBoard } from "@/components/live/timing-board";
 import { RaceControlFeed } from "@/components/live/race-control-feed";
 import { CircuitMap } from "@/components/live/circuit-map";
 import { SessionInfoPanel } from "@/components/live/session-info-panel";
@@ -29,6 +29,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils/cn";
 import { countryFlagUrl } from "@/lib/utils/formatters";
+import {
+  buildReplayTimingEntries,
+  filterDeletedLapTimes,
+  filterReplayRaceControl,
+} from "@/lib/utils/live-session-analysis";
 import {
   getQualifyingCutoffs,
   getQualifyingKnockoutPosition,
@@ -195,45 +200,7 @@ export default function SessionAnalysisPage() {
   // Filter out deleted lap times using race control messages.
   // Match by driver + lap time (seconds) rather than lap number, because
   // race control lap numbers are consistently off-by-one vs OpenF1.
-  const validLaps = useMemo(() => {
-    if (!laps) return null;
-    if (!raceControl) return laps;
-
-    // Parse "TIME m:ss.sss" to seconds
-    function parseTimeStr(t: string): number {
-      const parts = t.split(":");
-      return parseInt(parts[0]) * 60 + parseFloat(parts[1]);
-    }
-
-    // Track deleted times as Set<"driverNumber-seconds"> (rounded to 3dp)
-    const deletedTimes = new Set<string>();
-
-    for (const msg of raceControl) {
-      const carMatch = msg.message.match(/CAR (\d+)/);
-      const timeMatch = msg.message.match(/TIME ([\d:]+\.[\d]+)/);
-      if (!carMatch || !timeMatch) continue;
-      const car = carMatch[1];
-      const secs = parseTimeStr(timeMatch[1]).toFixed(3);
-      const key = `${car}-${secs}`;
-
-      if (msg.message.includes("DELETED")) {
-        deletedTimes.add(key);
-      } else if (msg.message.includes("REINSTATED")) {
-        deletedTimes.delete(key);
-      }
-    }
-
-    if (deletedTimes.size === 0) return laps;
-    return laps.map((l) => {
-      if (!l.lap_duration) return l;
-      if (deletedTimes.has(`${l.driver_number}-${l.lap_duration.toFixed(3)}`)) {
-        // Null out the duration so it's excluded from timing calculations,
-        // but keep the lap entry so it's still counted in laps completed.
-        return { ...l, lap_duration: null };
-      }
-      return l;
-    });
-  }, [laps, raceControl]);
+  const validLaps = useMemo(() => filterDeletedLapTimes(laps, raceControl), [laps, raceControl]);
 
   // Enriched results (pass intervals + stints for the 10-column table)
   const resultRows = useMemo(() => {
@@ -258,48 +225,15 @@ export default function SessionAnalysisPage() {
   // Filtered timing data for replay mode sidebar
   const replayTimingEntries = useMemo(() => {
     if (!drivers || !positions || !laps) return [];
-    const iv = intervals ?? [];
-    const st = stints ?? [];
-    if (replayTime === null)
-      return buildTimingData(drivers, positions, iv, st, laps);
-    const cutoff = new Date(replayTime).toISOString();
-    const filteredPositions = positions.filter((p) => p.date <= cutoff);
-    const filteredIntervals = iv.filter((i) => i.date <= cutoff);
-    let filteredLaps = laps.filter((l) => l.date_start <= cutoff);
-
-    // For qualifying, restrict laps to the current Q phase so personal
-    // bests and session bests reset after each phase (Q1→Q2→Q3).
-    // Each phase starts with a SESSION STARTED message.
-    if (isQuali && raceControl) {
-      let currentPhaseStart: string | null = null;
-      for (const msg of raceControl) {
-        if (msg.date > cutoff) continue;
-        if (msg.category === "SessionStatus" && msg.message === "SESSION STARTED") {
-          currentPhaseStart = msg.date;
-        }
-      }
-      if (currentPhaseStart) {
-        filteredLaps = filteredLaps.filter((l) => l.date_start >= currentPhaseStart!);
-      }
-    }
-
-    const maxLapByDriver = new Map<number, number>();
-    for (const l of filteredLaps) {
-      const cur = maxLapByDriver.get(l.driver_number) ?? 0;
-      if (l.lap_number > cur) maxLapByDriver.set(l.driver_number, l.lap_number);
-    }
-    const filteredStints = st.filter((s) => {
-      const maxLap = maxLapByDriver.get(s.driver_number) ?? 0;
-      return s.lap_start != null && s.lap_start <= maxLap;
-    });
-    return buildTimingData(
+    return buildReplayTimingEntries(
       drivers,
-      filteredPositions,
-      filteredIntervals,
-      filteredStints,
-      filteredLaps,
+      positions,
+      intervals ?? [],
+      stints ?? [],
+      laps,
       replayTime,
-      laps // full unfiltered laps for stable mini-sector grid layout
+      isQuali,
+      raceControl
     );
   }, [replayTime, drivers, positions, intervals, stints, laps, isQuali, raceControl]);
 
@@ -325,11 +259,10 @@ export default function SessionAnalysisPage() {
     return getQualifyingKnockoutPosition(raceControl, replayTime);
   }, [isQuali, raceControl, replayTime]);
 
-  const replayRaceControl = useMemo(() => {
-    if (!replayTime || !raceControl) return raceControl ?? [];
-    const cutoff = new Date(replayTime).toISOString();
-    return raceControl.filter((m) => m.date <= cutoff);
-  }, [replayTime, raceControl]);
+  const replayRaceControl = useMemo(
+    () => filterReplayRaceControl(raceControl, replayTime),
+    [replayTime, raceControl]
+  );
 
   const dataLoading = sessionKey && (!positions || !drivers);
   const dataError = posErr || intErr || drvErr || lapErr;

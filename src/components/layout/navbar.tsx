@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Flag, Menu, X, Timer, Trophy, CalendarDays } from "lucide-react";
@@ -22,7 +23,14 @@ export function Navbar() {
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
         {/* Logo */}
         <Link href="/" className="flex items-center">
-          <img src="/logo-nav.svg" alt="Undercut" className="h-10" />
+          <Image
+            src="/logo-nav.svg"
+            alt="Undercut"
+            width={180}
+            height={40}
+            className="h-10 w-auto"
+            priority
+          />
         </Link>
 
         {/* Desktop nav */}

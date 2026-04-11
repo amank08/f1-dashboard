@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { motion } from "framer-motion";
 import type { Driver, Position, Interval, Stint, LapData } from "@/lib/openf1/types";
 import { getTeamColor, getTeamLogoUrl, getTeamLogoStyle } from "@/lib/utils/colors";
@@ -425,9 +426,11 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
                       {(() => {
                         const logoUrl = getTeamLogoUrl(entry.teamName);
                         return logoUrl ? (
-                          <img
+                          <Image
                             src={logoUrl}
                             alt={entry.teamName}
+                            width={16}
+                            height={16}
                             className="h-4 w-4 object-contain"
                             style={getTeamLogoStyle(entry.teamName)}
                           />

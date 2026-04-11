@@ -41,7 +41,7 @@ export function TyreAllocationCard({
       {/* Selected compounds */}
       <div className="mt-3 flex items-center gap-4">
         {(["hard", "medium", "soft"] as const).map((type) => {
-          const { color, name } = COMPOUND_LABELS[type];
+          const { name } = COMPOUND_LABELS[type];
           const cNumber = allocation[type];
           return (
             <div key={type} className="flex flex-col items-center gap-1">

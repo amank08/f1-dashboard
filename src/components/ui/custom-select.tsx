@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -58,7 +59,7 @@ export function CustomSelect({
         {selected ? (
           <>
             {selected.iconUrl && (
-              <img src={selected.iconUrl} alt="" className="h-3.5 w-5 object-cover rounded-[2px] shrink-0" />
+              <Image src={selected.iconUrl} alt="" width={20} height={14} className="h-3.5 w-5 object-cover rounded-[2px] shrink-0" />
             )}
             <span className="truncate">{selected.label}</span>
           </>
@@ -92,7 +93,7 @@ export function CustomSelect({
               )}
             >
               {opt.iconUrl && (
-                <img src={opt.iconUrl} alt="" className="h-3.5 w-5 object-cover rounded-[2px] shrink-0" />
+                <Image src={opt.iconUrl} alt="" width={20} height={14} className="h-3.5 w-5 object-cover rounded-[2px] shrink-0" />
               )}
               <span className="truncate">{opt.label}</span>
             </button>
