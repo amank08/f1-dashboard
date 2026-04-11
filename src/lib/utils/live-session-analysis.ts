@@ -60,14 +60,26 @@ export function buildReplayTimingEntries(
 
   if (isQualifyingSession && raceControl) {
     let currentPhaseStart: string | null = null;
-    for (const msg of raceControl) {
+    let seenChequeredSinceLastStart = false;
+    const sortedRaceControl = [...raceControl].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
+    for (const msg of sortedRaceControl) {
       if (msg.date > cutoff) continue;
+      if (msg.flag === "CHEQUERED") {
+        seenChequeredSinceLastStart = true;
+      }
       if (msg.category === "SessionStatus" && msg.message === "SESSION STARTED") {
-        currentPhaseStart = msg.date;
+        if (currentPhaseStart === null || seenChequeredSinceLastStart) {
+          currentPhaseStart = msg.date;
+          seenChequeredSinceLastStart = false;
+        }
       }
     }
+
     if (currentPhaseStart) {
-      filteredLaps = filteredLaps.filter((l) => l.date_start >= currentPhaseStart);
+      filteredLaps = filteredLaps.filter((lap) => lap.date_start >= currentPhaseStart);
     }
   }
 
@@ -82,7 +94,7 @@ export function buildReplayTimingEntries(
     return s.lap_start != null && s.lap_start <= maxLap;
   });
 
-  return buildTimingData(
+  const entries = buildTimingData(
     drivers,
     filteredPositions,
     filteredIntervals,
@@ -91,6 +103,22 @@ export function buildReplayTimingEntries(
     replayTime,
     laps
   );
+
+  if (!isQualifyingSession) return entries;
+
+  const sorted = [...entries].sort((a, b) => {
+    if (a.bestLap !== null && b.bestLap !== null) {
+      return a.bestLap - b.bestLap || a.position - b.position;
+    }
+    if (a.bestLap !== null) return -1;
+    if (b.bestLap !== null) return 1;
+    return a.position - b.position;
+  });
+
+  return sorted.map((entry, index) => ({
+    ...entry,
+    position: index + 1,
+  }));
 }
 
 export function filterReplayRaceControl(

@@ -46,6 +46,68 @@ interface SectorBests {
   s3: number | null;
 }
 
+function getLapSectors(lap: LapData): [number | null, number | null, number | null] {
+  return [lap.duration_sector_1, lap.duration_sector_2, lap.duration_sector_3];
+}
+
+function getLapSegments(lap: LapData): (number | null)[][] {
+  const rawS1 = lap.segments_sector_1 ?? [];
+  const s1 = rawS1.length > 0 && rawS1[0] === null ? rawS1.slice(1) : rawS1;
+  return [
+    s1,
+    lap.segments_sector_2 ?? [],
+    lap.segments_sector_3 ?? [],
+  ];
+}
+
+function getLapStartMs(lap: LapData): number {
+  return new Date(lap.date_start).getTime();
+}
+
+function isLapCompleteByReplay(lap: LapData, replayTimestamp?: number | null): boolean {
+  if (lap.lap_duration == null || lap.lap_duration <= 0) return false;
+  if (replayTimestamp == null) return true;
+  return getLapStartMs(lap) + lap.lap_duration * 1000 <= replayTimestamp;
+}
+
+function isSectorCompleteByReplay(
+  lap: LapData,
+  sectorIndex: 0 | 1 | 2,
+  replayTimestamp?: number | null
+): boolean {
+  const durations = [lap.duration_sector_1, lap.duration_sector_2, lap.duration_sector_3] as const;
+  const sectorDuration = durations[sectorIndex];
+  if (sectorDuration == null || sectorDuration <= 0) return false;
+  if (replayTimestamp == null) return true;
+
+  let cumulative = 0;
+  for (let i = 0; i <= sectorIndex; i++) {
+    const duration = durations[i];
+    if (duration == null || duration <= 0) return false;
+    cumulative += duration;
+  }
+
+  return getLapStartMs(lap) + cumulative * 1000 <= replayTimestamp;
+}
+
+function fillCompletedSectorGaps(
+  segments: (number | null)[],
+  expectedCount: number
+): (number | null)[] {
+  const normalized = segments.slice(0, expectedCount);
+  if (normalized.length < expectedCount) {
+    normalized.push(...Array<null>(expectedCount - normalized.length).fill(null));
+  }
+
+  const lastKnownIndex = [...normalized].findLastIndex((value) => value !== null);
+  if (lastKnownIndex === -1) return normalized;
+
+  const lastKnown = normalized[lastKnownIndex];
+  if (lastKnown == null) return segments;
+
+  return normalized.map((value, index) => (index > lastKnownIndex && value === null ? lastKnown : value));
+}
+
 export interface TimingEntry {
   position: number;
   driverNumber: number;
@@ -78,13 +140,19 @@ export function buildTimingData(
 ): TimingEntry[] {
   // Get latest position per driver
   const latestPos = new Map<number, number>();
-  for (const p of positions) {
+  const sortedPositions = [...positions].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+  for (const p of sortedPositions) {
     latestPos.set(p.driver_number, p.position);
   }
 
   // Get latest interval per driver
   const latestInterval = new Map<number, { interval: number | string | null; gap: number | string | null }>();
-  for (const i of intervals) {
+  const sortedIntervals = [...intervals].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+  for (const i of sortedIntervals) {
     latestInterval.set(i.driver_number, {
       interval: i.interval,
       gap: i.gap_to_leader,
@@ -141,47 +209,68 @@ export function buildTimingData(
   // Track latest lap metadata for time-based masking
   const latestLapMeta = new Map<number, { dateStart: string; durations: [number | null, number | null, number | null] }>();
 
-  for (const l of laps) {
-    const dn = l.driver_number;
-    const prevLap = latestLapNum.get(dn) ?? 0;
-    if (l.lap_number > prevLap) latestLapNum.set(dn, l.lap_number);
+  const lapsByDriver = new Map<number, LapData[]>();
+  for (const lap of laps) {
+    const driverLaps = lapsByDriver.get(lap.driver_number) ?? [];
+    driverLaps.push(lap);
+    lapsByDriver.set(lap.driver_number, driverLaps);
+  }
 
-    // Skip pit out laps — they have garbage sector times and no valid
-    // lap duration, polluting bests and the mini-sector display.
-    if (l.is_pit_out_lap) continue;
-
-    // Track personal best sectors
-    const pb = personalBestSectors.get(dn) ?? { s1: null, s2: null, s3: null };
-    if (l.duration_sector_1 !== null && (pb.s1 === null || l.duration_sector_1 < pb.s1)) pb.s1 = l.duration_sector_1;
-    if (l.duration_sector_2 !== null && (pb.s2 === null || l.duration_sector_2 < pb.s2)) pb.s2 = l.duration_sector_2;
-    if (l.duration_sector_3 !== null && (pb.s3 === null || l.duration_sector_3 < pb.s3)) pb.s3 = l.duration_sector_3;
-    personalBestSectors.set(dn, pb);
-
-    // Save current as previous before overwriting (for sector time carry-over)
-    const prev = latestSectors.get(dn);
-    if (prev) prevLapSectors.set(dn, prev);
-    // Track latest sector times and segments (last lap in array)
-    latestSectors.set(dn, [l.duration_sector_1, l.duration_sector_2, l.duration_sector_3]);
-    // Strip the leading null that OpenF1 includes in S1 for the detection
-    // point — it doesn't represent a real mini-sector.
-    const rawS1 = l.segments_sector_1 ?? [];
-    const s1 = rawS1.length > 0 && rawS1[0] === null ? rawS1.slice(1) : rawS1;
-    latestSegments.set(dn, [
-      s1,
-      l.segments_sector_2 ?? [],
-      l.segments_sector_3 ?? [],
-    ]);
-    latestLapMeta.set(dn, {
-      dateStart: l.date_start,
-      durations: [l.duration_sector_1, l.duration_sector_2, l.duration_sector_3],
+  for (const [dn, driverLaps] of lapsByDriver) {
+    const sortedLaps = [...driverLaps].sort((a, b) => {
+      const lapDiff = a.lap_number - b.lap_number;
+      if (lapDiff !== 0) return lapDiff;
+      return new Date(a.date_start).getTime() - new Date(b.date_start).getTime();
     });
 
-    if (l.lap_duration === null || l.lap_duration <= 0) continue;
-    lastLap.set(dn, l.lap_duration);
-    const current = bestLap.get(dn);
-    if (!current || l.lap_duration < current) {
-      bestLap.set(dn, l.lap_duration);
+    const pb: SectorBests = { s1: null, s2: null, s3: null };
+    let lastCompletedLap: LapData | null = null;
+    let previousCompletedLap: LapData | null = null;
+
+    for (const lap of sortedLaps) {
+      latestLapNum.set(dn, Math.max(latestLapNum.get(dn) ?? 0, lap.lap_number));
+
+      if (!lap.is_pit_out_lap) {
+        if (isSectorCompleteByReplay(lap, 0, replayTimestamp) && lap.duration_sector_1 !== null && (pb.s1 === null || lap.duration_sector_1 < pb.s1)) pb.s1 = lap.duration_sector_1;
+        if (isSectorCompleteByReplay(lap, 1, replayTimestamp) && lap.duration_sector_2 !== null && (pb.s2 === null || lap.duration_sector_2 < pb.s2)) pb.s2 = lap.duration_sector_2;
+        if (isSectorCompleteByReplay(lap, 2, replayTimestamp) && lap.duration_sector_3 !== null && (pb.s3 === null || lap.duration_sector_3 < pb.s3)) pb.s3 = lap.duration_sector_3;
+      }
+
+      if (lap.is_pit_out_lap || !isLapCompleteByReplay(lap, replayTimestamp)) continue;
+
+      previousCompletedLap = lastCompletedLap;
+      lastCompletedLap = lap;
+      lastLap.set(dn, lap.lap_duration);
+
+      const currentBest = bestLap.get(dn);
+      if (!currentBest || lap.lap_duration < currentBest) {
+        bestLap.set(dn, lap.lap_duration);
+      }
     }
+
+    personalBestSectors.set(dn, pb);
+
+    const currentDisplayLap = sortedLaps[sortedLaps.length - 1] ?? null;
+    if (!currentDisplayLap) continue;
+
+    const carryOverLap =
+      currentDisplayLap === lastCompletedLap ? previousCompletedLap : lastCompletedLap;
+    if (carryOverLap) {
+      prevLapSectors.set(dn, getLapSectors(carryOverLap));
+    }
+
+    if (currentDisplayLap.is_pit_out_lap) {
+      latestSectors.set(dn, [null, null, null]);
+      latestSegments.set(dn, [[], [], []]);
+      continue;
+    }
+
+    latestSectors.set(dn, getLapSectors(currentDisplayLap));
+    latestSegments.set(dn, getLapSegments(currentDisplayLap));
+    latestLapMeta.set(dn, {
+      dateStart: currentDisplayLap.date_start,
+      durations: getLapSectors(currentDisplayLap),
+    });
   }
 
   // Pad/trim segments to the fixed circuit mini-sector count and apply
@@ -231,7 +320,13 @@ export function buildTimingData(
             const revealCount = Math.floor(fraction * sectorLen);
             segs[si] = segs[si].map((v, idx) => (idx < revealCount ? v : null));
           }
-          // else: sector fully elapsed — show all segments as-is
+          // If OpenF1 delivered a short segment array for an already
+          // completed sector, preserve the circuit's full mini-sector grid by
+          // extending the tail with the last known state instead of leaving a
+          // permanently gray final cell.
+          else if (sectorDuration != null) {
+            segs[si] = fillCompletedSectorGaps(segs[si], sectorLen);
+          }
         }
       }
     }
@@ -310,16 +405,16 @@ export function buildTimingData(
         acronym: driver.name_acronym,
         teamColour: driver.team_colour,
         teamName: driver.team_name,
-        interval: null,
-        gapToLeader: null,
-        lastLap: null,
-        bestLap: null,
-        compound: null,
-        pitCount: 0,
-        sectorTimes: [null, null, null],
-        segments: [[], [], []],
-        personalBestSectors: { s1: null, s2: null, s3: null },
-        currentLap: 0,
+        interval: latestInterval.get(driver.driver_number)?.interval ?? null,
+        gapToLeader: latestInterval.get(driver.driver_number)?.gap ?? null,
+        lastLap: lastLap.get(driver.driver_number) ?? null,
+        bestLap: bestLap.get(driver.driver_number) ?? null,
+        compound: currentCompound.get(driver.driver_number) ?? null,
+        pitCount: pitCounts.get(driver.driver_number) ?? 0,
+        sectorTimes: latestSectors.get(driver.driver_number) ?? [null, null, null],
+        segments: latestSegments.get(driver.driver_number) ?? [[], [], []],
+        personalBestSectors: personalBestSectors.get(driver.driver_number) ?? { s1: null, s2: null, s3: null },
+        currentLap: latestLapNum.get(driver.driver_number) ?? 0,
       });
     }
   }
@@ -327,23 +422,47 @@ export function buildTimingData(
   return sorted;
 }
 
-function MiniSectors({ segments }: { segments: (number | null)[][] }) {
-  const allSegments = segments.flat();
-  if (allSegments.length === 0) return null;
+function MiniSectorDotsGroup({ segments }: { segments: (number | null)[] }) {
+  if (segments.length === 0) return null;
 
   return (
-    <div className="flex gap-px justify-center">
-      {segments.map((sector, si) => (
-          <div key={si} className={cn("flex gap-px", si > 0 && "ml-1")}>
-            {sector.map((seg, mi) => (
-              <div
-                key={`${si}-${mi}`}
-                className="h-3 w-1.5 rounded-[1px]"
-                style={{ backgroundColor: getSegmentColor(seg) }}
-              />
-            ))}
-          </div>
+    <div className="flex justify-center gap-0.5">
+      {segments.map((seg, mi) => (
+        <div
+          key={mi}
+          className="h-1.5 w-1.5 rounded-full"
+          style={{ backgroundColor: getSegmentColor(seg) }}
+        />
       ))}
+    </div>
+  );
+}
+
+function SectorBreakdown({
+  sectorTimes,
+  segments,
+  personalBest,
+  overallBest,
+}: {
+  sectorTimes: [number | null, number | null, number | null];
+  segments: (number | null)[][];
+  personalBest: SectorBests;
+  overallBest: SectorBests;
+}) {
+  return (
+    <div className="flex items-start justify-center gap-1.5">
+      {sectorTimes.map((value, index) => {
+        const pb = index === 0 ? personalBest.s1 : index === 1 ? personalBest.s2 : personalBest.s3;
+        const ob = index === 0 ? overallBest.s1 : index === 1 ? overallBest.s2 : overallBest.s3;
+        return (
+          <div key={index} className="flex min-w-0 flex-col items-center gap-1">
+            <span className={cn("font-mono text-[10px] leading-none whitespace-nowrap", getSectorColor(value, pb, ob))}>
+              {value !== null ? value.toFixed(3) : "—"}
+            </span>
+            <MiniSectorDotsGroup segments={segments[index] ?? []} />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -376,14 +495,12 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
           <tr className="border-b border-f1-border bg-f1-surface text-xs font-semibold uppercase text-f1-text-muted">
             <th className="sticky left-0 z-20 bg-f1-surface px-2 py-2.5 text-center w-10">Pos</th>
             <th className="sticky left-10 z-20 bg-f1-surface px-2 py-2.5 text-left whitespace-nowrap">Driver</th>
+            {isQualifying && <th className="px-2 py-2.5 text-center whitespace-nowrap">Best</th>}
             {!isQualifying && <th className="px-2 py-2.5 text-center whitespace-nowrap">Int</th>}
             {!isQualifying && <th className="px-2 py-2.5 text-center whitespace-nowrap">Gap</th>}
-            <th className="px-2 py-2.5 text-center whitespace-nowrap">S1</th>
-            <th className="px-2 py-2.5 text-center whitespace-nowrap">S2</th>
-            <th className="px-2 py-2.5 text-center whitespace-nowrap">S3</th>
-            <th className="px-2 py-2.5 text-center whitespace-nowrap">Mini Sectors</th>
+            <th className="px-2 py-2.5 text-center whitespace-nowrap">Sectors</th>
             <th className="px-2 py-2.5 text-center whitespace-nowrap">Last</th>
-            <th className="px-2 py-2.5 text-center whitespace-nowrap">Best</th>
+            {!isQualifying && <th className="px-2 py-2.5 text-center whitespace-nowrap">Best</th>}
             <th className="px-2 py-2.5 text-center w-10">Tire</th>
             {!isQualifying && <th className="px-2 py-2.5 text-center w-10">Pit</th>}
           </tr>
@@ -462,29 +579,41 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
                         : "—"}
                   </td>
                 )}
-                <td className={cn("px-2 py-2 text-center font-mono text-xs whitespace-nowrap", getSectorColor(s1, pb.s1, ob.s1))}>
-                  {s1 !== null ? s1.toFixed(3) : "—"}
-                </td>
-                <td className={cn("px-2 py-2 text-center font-mono text-xs whitespace-nowrap", getSectorColor(s2, pb.s2, ob.s2))}>
-                  {s2 !== null ? s2.toFixed(3) : "—"}
-                </td>
-                <td className={cn("px-2 py-2 text-center font-mono text-xs whitespace-nowrap", getSectorColor(s3, pb.s3, ob.s3))}>
-                  {s3 !== null ? s3.toFixed(3) : "—"}
-                </td>
+                {isQualifying && (
+                  <td
+                    className={cn(
+                      "px-2 py-2 text-center font-mono whitespace-nowrap",
+                      entry.bestLap !== null && entry.bestLap === overallBest && "text-purple-400 font-bold"
+                    )}
+                  >
+                    {entry.bestLap === null
+                      ? "—"
+                      : entry.position === 1
+                        ? formatLapTime(entry.bestLap)
+                        : `+${(entry.bestLap - overallBest).toFixed(3)}`}
+                  </td>
+                )}
                 <td className="px-2 py-2 text-center">
-                  <MiniSectors segments={entry.segments} />
-                </td>
+                  <SectorBreakdown
+                    sectorTimes={[s1, s2, s3]}
+                    segments={entry.segments}
+                      personalBest={pb}
+                      overallBest={ob}
+                    />
+                  </td>
                 <td className="px-2 py-2 text-center font-mono whitespace-nowrap">
                   {formatLapTime(entry.lastLap)}
                 </td>
-                <td
-                  className={cn(
-                    "px-2 py-2 text-center font-mono whitespace-nowrap",
-                    entry.bestLap !== null && entry.bestLap === overallBest && "text-purple-400 font-bold"
-                  )}
-                >
-                  {formatLapTime(entry.bestLap)}
-                </td>
+                {!isQualifying && (
+                  <td
+                    className={cn(
+                      "px-2 py-2 text-center font-mono whitespace-nowrap",
+                      entry.bestLap !== null && entry.bestLap === overallBest && "text-purple-400 font-bold"
+                    )}
+                  >
+                    {formatLapTime(entry.bestLap)}
+                  </td>
+                )}
                 <td className="px-2 py-2 text-center">
                   {entry.compound && (
                     <span className="inline-flex items-center justify-center">

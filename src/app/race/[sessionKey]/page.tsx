@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import Link from "next/link";
-import { ArrowLeft, Timer, Flag, Fuel, Radio } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useSession } from "@/lib/hooks/use-sessions";
 import { useDrivers } from "@/lib/hooks/use-drivers";
 import { useLaps } from "@/lib/hooks/use-laps";
@@ -78,28 +78,6 @@ export default function RaceResultsPage({
             : undefined
         }
       />
-
-      {/* Sub-navigation */}
-      <div className="flex gap-2 overflow-x-auto">
-        {[
-          { href: `/race/${sessionKey}`, label: "Results", icon: Flag },
-          { href: `/race/${sessionKey}/laps`, label: "Laps", icon: Timer },
-          { href: `/race/${sessionKey}/pitstops`, label: "Pit Stops", icon: Fuel },
-          { href: `/race/${sessionKey}/radio`, label: "Radio", icon: Radio },
-        ].map((item) => {
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex items-center gap-2 rounded-md border border-f1-border bg-f1-surface px-4 py-2 text-sm font-semibold text-f1-text-secondary hover:bg-f1-card hover:text-f1-text transition-colors whitespace-nowrap"
-            >
-              <Icon size={14} />
-              {item.label}
-            </Link>
-          );
-        })}
-      </div>
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-3">
