@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { motion } from "framer-motion";
-import type { Driver, Position, Interval, Stint, LapData } from "@/lib/openf1/types";
+import type { Driver, Position, Interval, Stint, LapData, RaceControlMessage } from "@/lib/openf1/types";
 import { getTeamColor, getTeamLogoUrl, getTeamLogoStyle } from "@/lib/utils/colors";
 import { TyreIcon } from "@/components/ui/tyre-icon";
 import { formatLapTime } from "@/lib/utils/formatters";
@@ -62,6 +62,46 @@ function getLapSegments(lap: LapData): (number | null)[][] {
 
 function getLapStartMs(lap: LapData): number {
   return new Date(lap.date_start).getTime();
+}
+
+function isPitSegmentReached(
+  lap: LapData,
+  segments: (number | null)[][],
+  replayTimestamp: number | null | undefined
+): boolean {
+  if (replayTimestamp == null) {
+    return segments.some((sector) => sector.some((segment) => segment === SEGMENT_PIT));
+  }
+
+  const elapsed = (replayTimestamp - getLapStartMs(lap)) / 1000;
+  const d1 = lap.duration_sector_1;
+  const d2 = lap.duration_sector_2;
+  const d3 = lap.duration_sector_3;
+  const sectorDurations = [d1, d2, d3] as const;
+
+  for (let si = 0; si < 3; si++) {
+    const sector = segments[si];
+    const sectorLen = sector.length;
+    if (sectorLen === 0) continue;
+
+    const sectorStart =
+      si === 0 ? 0 :
+      si === 1 ? (d1 ?? Infinity) :
+                 (d1 ?? Infinity) + (d2 ?? Infinity);
+
+    const sectorDuration = sectorDurations[si];
+
+    for (let pi = 0; pi < sectorLen; pi++) {
+      if (sector[pi] !== SEGMENT_PIT) continue;
+      const segStart =
+        sectorDuration != null
+          ? sectorStart + (pi / sectorLen) * sectorDuration
+          : sectorStart;
+      if (elapsed >= segStart) return true;
+    }
+  }
+
+  return false;
 }
 
 function isLapCompleteByReplay(lap: LapData, replayTimestamp?: number | null): boolean {
@@ -124,6 +164,8 @@ export interface TimingEntry {
   segments: (number | null)[][];
   personalBestSectors: SectorBests;
   currentLap: number;
+  isInPit: boolean;
+  hasTakenChequered: boolean;
 }
 
 export function buildTimingData(
@@ -136,7 +178,8 @@ export function buildTimingData(
   /** Full unfiltered laps — used to compute a stable mini-sector grid
    *  layout that doesn't shift as the replay progresses. Only needed
    *  when `laps` is a time-filtered subset. */
-  allLaps?: LapData[]
+  allLaps?: LapData[],
+  raceControl?: RaceControlMessage[]
 ): TimingEntry[] {
   // Get latest position per driver
   const latestPos = new Map<number, number>();
@@ -175,6 +218,8 @@ export function buildTimingData(
   const prevLapSectors = new Map<number, [number | null, number | null, number | null]>();
   const latestSegments = new Map<number, (number | null)[][]>();
   const personalBestSectors = new Map<number, SectorBests>();
+  const inPit = new Map<number, boolean>();
+  const hasTakenChequered = new Map<number, boolean>();
   // Mini-sector count per sector is a fixed property of the circuit.
   // OpenF1 segment arrays vary in length due to pit laps and partial
   // data, so we use the MODE (most common count) across all session
@@ -203,6 +248,25 @@ export function buildTimingData(
         if (count > bestCount) { best = len; bestCount = count; }
       }
       sectorCounts[si] = best;
+    }
+  }
+
+  let activeChequeredAt: number | null = null;
+  if (raceControl && raceControl.length > 0) {
+    const cutoff = replayTimestamp != null ? replayTimestamp : Infinity;
+    const sortedRaceControl = [...raceControl].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
+    for (const msg of sortedRaceControl) {
+      const messageTime = new Date(msg.date).getTime();
+      if (messageTime > cutoff) continue;
+      if (msg.category === "SessionStatus" && msg.message === "SESSION STARTED") {
+        activeChequeredAt = null;
+      }
+      if (msg.flag === "CHEQUERED") {
+        activeChequeredAt = messageTime;
+      }
     }
   }
 
@@ -256,6 +320,18 @@ export function buildTimingData(
     const currentDisplayLap = sortedLaps[sortedLaps.length - 1] ?? null;
     if (!currentDisplayLap) continue;
 
+    const currentSegments = getLapSegments(currentDisplayLap);
+
+    if (activeChequeredAt != null) {
+      const completedAfterChequered = sortedLaps.some((lap) => {
+        if (lap.is_pit_out_lap || !isLapCompleteByReplay(lap, replayTimestamp)) return false;
+        const lapDuration = lap.lap_duration;
+        if (lapDuration == null) return false;
+        return getLapStartMs(lap) + lapDuration * 1000 >= activeChequeredAt;
+      });
+      hasTakenChequered.set(dn, completedAfterChequered);
+    }
+
     const carryOverLap =
       currentDisplayLap === lastCompletedLap ? previousCompletedLap : lastCompletedLap;
     if (carryOverLap) {
@@ -263,13 +339,15 @@ export function buildTimingData(
     }
 
     if (currentDisplayLap.is_pit_out_lap) {
+      inPit.set(dn, false);
       latestSectors.set(dn, [null, null, null]);
       latestSegments.set(dn, [[], [], []]);
       continue;
     }
 
+    inPit.set(dn, isPitSegmentReached(currentDisplayLap, currentSegments, replayTimestamp));
     latestSectors.set(dn, getLapSectors(currentDisplayLap));
-    latestSegments.set(dn, getLapSegments(currentDisplayLap));
+    latestSegments.set(dn, currentSegments);
     latestLapMeta.set(dn, {
       dateStart: currentDisplayLap.date_start,
       durations: getLapSectors(currentDisplayLap),
@@ -390,6 +468,8 @@ export function buildTimingData(
       segments: latestSegments.get(driverNum) ?? [[], [], []],
       personalBestSectors: personalBestSectors.get(driverNum) ?? { s1: null, s2: null, s3: null },
       currentLap: latestLapNum.get(driverNum) ?? 0,
+      isInPit: inPit.get(driverNum) ?? false,
+      hasTakenChequered: hasTakenChequered.get(driverNum) ?? false,
     });
   }
 
@@ -418,6 +498,8 @@ export function buildTimingData(
         segments: latestSegments.get(driver.driver_number) ?? [[], [], []],
         personalBestSectors: personalBestSectors.get(driver.driver_number) ?? { s1: null, s2: null, s3: null },
         currentLap: latestLapNum.get(driver.driver_number) ?? 0,
+        isInPit: inPit.get(driver.driver_number) ?? false,
+        hasTakenChequered: hasTakenChequered.get(driver.driver_number) ?? false,
       });
     }
   }
@@ -470,7 +552,46 @@ function SectorBreakdown({
   );
 }
 
-export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPosition }: { entries: TimingEntry[]; retiredDrivers?: Map<number, string>; isQualifying?: boolean; knockoutPosition?: number }) {
+function DriverStatusBadges({
+  isInPit,
+  hasTakenChequered,
+}: {
+  isInPit: boolean;
+  hasTakenChequered: boolean;
+}) {
+  if (!isInPit && !hasTakenChequered) return null;
+
+  return (
+    <div className="flex items-center gap-1">
+      {hasTakenChequered && (
+        <span
+          title="Took chequered flag"
+          aria-label="Took chequered flag"
+          className="h-3.5 w-3.5 shrink-0 rounded-[3px] border border-white/15 bg-[linear-gradient(45deg,#ffffff_25%,#111827_25%,#111827_50%,#ffffff_50%,#ffffff_75%,#111827_75%,#111827_100%)] bg-[length:6px_6px]"
+        />
+      )}
+      {isInPit && (
+        <span className="rounded bg-f1-text-muted/15 px-1 py-0.5 text-[9px] font-semibold leading-none tracking-[0.12em] text-f1-text-muted">
+          PIT
+        </span>
+      )}
+    </div>
+  );
+}
+
+export function TimingBoard({
+  entries,
+  retiredDrivers,
+  isQualifying,
+  isPractice,
+  knockoutPosition,
+}: {
+  entries: TimingEntry[];
+  retiredDrivers?: Map<number, string>;
+  isQualifying?: boolean;
+  isPractice?: boolean;
+  knockoutPosition?: number;
+}) {
   if (entries.length === 0) {
     return (
       <div className="rounded-lg border border-f1-border bg-f1-surface p-8 text-center text-f1-text-muted">
@@ -491,6 +612,8 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
     if (pb.s3 !== null && (overallBestSectors.s3 === null || pb.s3 < overallBestSectors.s3)) overallBestSectors.s3 = pb.s3;
   }
 
+  const usesQualifyingStyleLayout = !!(isQualifying || isPractice);
+
   return (
     <div className="overflow-x-auto rounded-lg border border-f1-border bg-f1-bg">
       <table className="w-full text-sm">
@@ -498,14 +621,14 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
           <tr className="border-b border-f1-border bg-f1-surface text-xs font-semibold uppercase text-f1-text-muted">
             <th className="sticky left-0 z-20 bg-f1-surface px-2 py-2.5 text-center w-10">Pos</th>
             <th className="sticky left-10 z-20 bg-f1-surface px-2 py-2.5 text-left whitespace-nowrap">Driver</th>
-            {isQualifying && <th className="px-2 py-2.5 text-center whitespace-nowrap">Best</th>}
-            {!isQualifying && <th className="px-2 py-2.5 text-center whitespace-nowrap">Int</th>}
-            {!isQualifying && <th className="px-2 py-2.5 text-center whitespace-nowrap">Gap</th>}
+            {usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center whitespace-nowrap">Best</th>}
+            {!usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center whitespace-nowrap">Int</th>}
+            {!usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center whitespace-nowrap">Gap</th>}
             <th className="px-2 py-2.5 text-center whitespace-nowrap">Sectors</th>
             <th className="px-2 py-2.5 text-center whitespace-nowrap">Last</th>
-            {!isQualifying && <th className="px-2 py-2.5 text-center whitespace-nowrap">Best</th>}
+            {!usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center whitespace-nowrap">Best</th>}
             <th className="px-2 py-2.5 text-center w-10">Tire</th>
-            {!isQualifying && <th className="px-2 py-2.5 text-center w-10">Pit</th>}
+            {!usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center w-10">Pit</th>}
           </tr>
         </thead>
         <tbody>
@@ -557,10 +680,16 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
                         ) : null;
                       })()}
                     </div>
-                    <span className="font-bold">{entry.acronym}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold">{entry.acronym}</span>
+                      <DriverStatusBadges
+                        isInPit={entry.isInPit}
+                        hasTakenChequered={entry.hasTakenChequered}
+                      />
+                    </div>
                   </div>
                 </td>
-                {!isQualifying && (
+                {!usesQualifyingStyleLayout && (
                   <td className="px-2 py-2 text-center font-mono text-f1-text-secondary whitespace-nowrap">
                     {entry.position === 1
                       ? "—"
@@ -571,7 +700,7 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
                         : "—"}
                   </td>
                 )}
-                {!isQualifying && (
+                {!usesQualifyingStyleLayout && (
                   <td className="px-2 py-2 text-center font-mono text-f1-text-secondary whitespace-nowrap">
                     {entry.position === 1
                       ? "LEADER"
@@ -582,7 +711,7 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
                         : "—"}
                   </td>
                 )}
-                {isQualifying && (
+                {usesQualifyingStyleLayout && (
                   <td
                     className={cn(
                       "px-2 py-2 text-center font-mono whitespace-nowrap",
@@ -607,7 +736,7 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
                 <td className="px-2 py-2 text-center font-mono whitespace-nowrap">
                   {formatLapTime(entry.lastLap)}
                 </td>
-                {!isQualifying && (
+                {!usesQualifyingStyleLayout && (
                   <td
                     className={cn(
                       "px-2 py-2 text-center font-mono whitespace-nowrap",
@@ -624,7 +753,7 @@ export function TimingBoard({ entries, retiredDrivers, isQualifying, knockoutPos
                     </span>
                   )}
                 </td>
-                {!isQualifying && (
+                {!usesQualifyingStyleLayout && (
                   <td className="px-2 py-2 text-center text-f1-text-muted">
                     {entry.pitCount}
                   </td>

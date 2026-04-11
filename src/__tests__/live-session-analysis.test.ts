@@ -359,6 +359,131 @@ describe("buildReplayTimingEntries", () => {
     expect(entries[1].gapToLeader).toBe(1.234);
   });
 
+  it("marks drivers as in pit when the current lap carries pit mini-sector status", () => {
+    const drivers = [driver(4, "NOR")];
+    const positions = [position("2026-03-14T05:30:05.000Z", 4, 1)];
+    const laps = [
+      {
+        ...lap(4, 2, "2026-03-14T05:28:00.000Z", null),
+        segments_sector_1: [2049],
+        segments_sector_2: [2064],
+        segments_sector_3: [],
+      },
+    ];
+
+    const entries = buildTimingData(
+      drivers,
+      positions,
+      [],
+      [],
+      laps,
+      Date.parse("2026-03-14T05:28:45.000Z"),
+      laps
+    );
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].isInPit).toBe(true);
+  });
+
+  it("does not mark a driver as in pit during a pit-out lap", () => {
+    const drivers = [driver(4, "NOR")];
+    const positions = [position("2026-03-14T05:30:05.000Z", 4, 1)];
+    const laps = [
+      {
+        ...lap(4, 1, "2026-03-14T05:20:00.000Z", 120),
+        duration_sector_1: 30,
+        duration_sector_2: 30,
+        duration_sector_3: 60,
+        segments_sector_1: [2049],
+        segments_sector_2: [2049],
+        segments_sector_3: [2064],
+      },
+      {
+        ...lap(4, 2, "2026-03-14T05:22:00.000Z", null),
+        is_pit_out_lap: true,
+        segments_sector_1: [2064],
+        segments_sector_2: [],
+        segments_sector_3: [],
+      },
+    ];
+
+    const entries = buildTimingData(
+      drivers,
+      positions,
+      [],
+      [],
+      laps,
+      Date.parse("2026-03-14T05:22:30.000Z"),
+      laps
+    );
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].isInPit).toBe(false);
+  });
+
+  it("does not mark a driver as in pit before the pit segment time is reached", () => {
+    const drivers = [driver(4, "NOR")];
+    const positions = [position("2026-03-14T05:30:05.000Z", 4, 1)];
+    const laps = [
+      {
+        ...lap(4, 2, "2026-03-14T05:28:00.000Z", null),
+        duration_sector_1: 30,
+        duration_sector_2: 30,
+        duration_sector_3: 30,
+        segments_sector_1: [2049],
+        segments_sector_2: [2064],
+        segments_sector_3: [],
+      },
+    ];
+
+    const entries = buildTimingData(
+      drivers,
+      positions,
+      [],
+      [],
+      laps,
+      Date.parse("2026-03-14T05:28:20.000Z"),
+      laps
+    );
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].isInPit).toBe(false);
+  });
+
+  it("marks drivers with a chequered badge only after they complete a lap after the active chequered", () => {
+    const drivers = [driver(4, "NOR"), driver(81, "PIA")];
+    const positions = [
+      position("2026-03-14T05:30:05.000Z", 4, 1),
+      position("2026-03-14T05:30:05.000Z", 81, 2),
+    ];
+    const laps = [
+      {
+        ...lap(4, 2, "2026-03-14T05:28:20.000Z", 90),
+      },
+      {
+        ...lap(81, 2, "2026-03-14T05:29:10.000Z", 90),
+      },
+    ];
+    const raceControl = [
+      { ...msg("2026-03-14T05:29:45.000Z", "CHEQUERED FLAG"), category: "Other", flag: "CHEQUERED" },
+    ];
+
+    const entries = buildTimingData(
+      drivers,
+      positions,
+      [],
+      [],
+      laps,
+      Date.parse("2026-03-14T05:30:00.000Z"),
+      laps,
+      raceControl
+    );
+
+    expect(entries).toHaveLength(2);
+    expect(entries.find((entry) => entry.driverNumber === 4)?.hasTakenChequered).toBe(true);
+    expect(entries.find((entry) => entry.driverNumber === 81)?.hasTakenChequered).toBe(false);
+  });
+
   it("orders qualifying replay entries by phase best lap instead of stale position snapshots", () => {
     const drivers = [driver(12, "ANT"), driver(81, "PIA")];
     const positions = [

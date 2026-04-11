@@ -50,7 +50,7 @@ export function buildReplayTimingEntries(
   raceControl: RaceControlMessage[] | null | undefined
 ): TimingEntry[] {
   if (replayTime === null) {
-    return buildTimingData(drivers, positions, intervals, stints, laps);
+    return buildTimingData(drivers, positions, intervals, stints, laps, replayTime, laps, raceControl ?? undefined);
   }
 
   const cutoff = new Date(replayTime).toISOString();
@@ -101,7 +101,8 @@ export function buildReplayTimingEntries(
     filteredStints,
     filteredLaps,
     replayTime,
-    laps
+    laps,
+    raceControl ?? undefined
   );
 
   if (!isQualifyingSession) return entries;
