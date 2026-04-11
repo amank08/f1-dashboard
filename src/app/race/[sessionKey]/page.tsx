@@ -15,7 +15,7 @@ import { StatCard } from "@/components/cards/stat-card";
 import { TeamRadioCard } from "@/components/cards/team-radio-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatLapTime } from "@/lib/utils/formatters";
-import { getPositionChanges } from "@/lib/utils/analytics";
+import { buildSessionSummary } from "@/lib/utils/session-summary";
 
 export default function RaceResultsPage({
   params,
@@ -56,6 +56,9 @@ export default function RaceResultsPage({
   const totalLaps = laps
     ? Math.max(...laps.map((l) => l.lap_number), 0)
     : 0;
+  const sessionSummary = positions && drivers && laps
+    ? buildSessionSummary(drivers, positions, laps)
+    : null;
 
   return (
     <div className="space-y-6">
@@ -128,40 +131,9 @@ export default function RaceResultsPage({
           <ResultsTable results={results} />
 
           {/* Grid vs Finish chart */}
-          {(() => {
-            // Build grid positions from first lap positions, finish from last
-            const driverLookup = new Map(
-              drivers?.map((d) => [d.driver_number, d]) ?? []
-            );
-            const gridMap = new Map<number, number>();
-            const finishMap = new Map<number, number>();
-            if (positions) {
-              // Earliest position entries = grid, latest = finish
-              const sorted = [...positions].sort(
-                (a, b) =>
-                  new Date(a.date).getTime() - new Date(b.date).getTime()
-              );
-              for (const p of sorted) {
-                if (!gridMap.has(p.driver_number)) {
-                  gridMap.set(p.driver_number, p.position);
-                }
-                finishMap.set(p.driver_number, p.position);
-              }
-            }
-            const changes = getPositionChanges(gridMap, finishMap);
-            const chartData = changes.map((c) => {
-              const d = driverLookup.get(c.driverNumber);
-              return {
-                name: d?.name_acronym ?? String(c.driverNumber),
-                gridPos: c.gridPos,
-                finishPos: c.finishPos,
-                teamColour: d?.team_colour ?? "888888",
-                teamName: d?.team_name,
-                change: c.change,
-              };
-            });
-            return chartData.length > 0 ? <GridVsFinishChart data={chartData} /> : null;
-          })()}
+          {sessionSummary?.gridVsFinishData.length
+            ? <GridVsFinishChart data={sessionSummary.gridVsFinishData} />
+            : null}
         </>
       )}
 

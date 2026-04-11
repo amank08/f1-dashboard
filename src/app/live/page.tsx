@@ -28,13 +28,13 @@ import { SectorDominanceChart } from "@/components/charts/sector-dominance-chart
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils/cn";
-import { getPositionChanges } from "@/lib/utils/analytics";
 import { countryFlagUrl } from "@/lib/utils/formatters";
 import {
   getQualifyingCutoffs,
   getQualifyingKnockoutPosition,
   getRetiredDrivers,
 } from "@/lib/utils/replay-processor";
+import { buildSessionSummary } from "@/lib/utils/session-summary";
 import { CustomSelect } from "@/components/ui/custom-select";
 import type { Session } from "@/lib/openf1/types";
 
@@ -245,52 +245,13 @@ export default function SessionAnalysisPage() {
   // Race summary stats
   const raceStats = useMemo(() => {
     if (!drivers || !validLaps || !positions) return null;
-
-    // Position changes
-    const sorted = [...positions].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-    const gridMap = new Map<number, number>();
-    const finishMap = new Map<number, number>();
-    for (const p of sorted) {
-      if (!gridMap.has(p.driver_number)) gridMap.set(p.driver_number, p.position);
-      finishMap.set(p.driver_number, p.position);
-    }
-    const changes = getPositionChanges(gridMap, finishMap);
-
-    // Total laps — prefer stint lap_end (actual race distance) over lap entries
-    // (which may have inconsistent phantom entries)
-    const stintMax = stints
-      ? Math.max(...stints.filter((s) => s.lap_end != null).map((s) => s.lap_end!), 0)
-      : 0;
-    const totalLaps = stintMax > 0
-      ? stintMax
-      : Math.max(...validLaps.map((l) => l.lap_number), 0);
-
-    return {
-      changes,
-      gridMap,
-      finishMap,
-      totalLaps,
-    };
+    return buildSessionSummary(drivers, positions, validLaps, stints);
   }, [drivers, validLaps, positions, stints]);
 
   // Chart data for GridVsFinish
   const gridVsFinishData = useMemo(() => {
-    if (!raceStats || !drivers) return [];
-    const driverLookup = new Map(drivers.map((d) => [d.driver_number, d]));
-    return raceStats.changes.map((c) => {
-      const d = driverLookup.get(c.driverNumber);
-      return {
-        name: d?.name_acronym ?? String(c.driverNumber),
-        gridPos: c.gridPos,
-        finishPos: c.finishPos,
-        teamColour: d?.team_colour ?? "888888",
-        teamName: d?.team_name,
-        change: c.change,
-      };
-    });
-  }, [raceStats, drivers]);
+    return raceStats?.gridVsFinishData ?? [];
+  }, [raceStats]);
 
   const isQuali = sessions?.find((s) => s.session_key === sessionKey)?.session_type === "Qualifying";
 
