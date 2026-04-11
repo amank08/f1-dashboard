@@ -220,7 +220,11 @@ export default function SessionAnalysisPage() {
     return raceStats?.gridVsFinishData ?? [];
   }, [raceStats]);
 
-  const isQuali = sessions?.find((s) => s.session_key === sessionKey)?.session_type === "Qualifying";
+  const selectedSession = availableSessions.find(
+    (s) => s.session_key === sessionKey
+  );
+
+  const isQuali = selectedSession?.session_type === "Qualifying";
 
   // Filtered timing data for replay mode sidebar
   const replayTimingEntries = useMemo(() => {
@@ -247,9 +251,10 @@ export default function SessionAnalysisPage() {
       replayTime,
       isQuali,
       raceControl ?? [],
-      positions ?? []
+      positions ?? [],
+      selectedSession?.session_type
     );
-  }, [replayTimingEntries, laps, replayTime, isQuali, raceControl, positions]);
+  }, [replayTimingEntries, laps, replayTime, isQuali, raceControl, positions, selectedSession?.session_type]);
 
   // Knockout zone: position at which drivers are in danger of elimination.
   // During Q1 the bottom 6 are eliminated, during Q2 the next bottom 6.
@@ -268,12 +273,9 @@ export default function SessionAnalysisPage() {
   const dataError = posErr || intErr || drvErr || lapErr;
   const dataUnavailable = sessionKey && !dataLoading && dataError && !positions;
 
-  const selectedSession = availableSessions.find(
-    (s) => s.session_key === sessionKey
-  );
-
   const isRaceSession = selectedSession?.session_type === "Race" || selectedSession?.session_type === "Sprint";
   const isQualifying = selectedSession?.session_type === "Qualifying" || selectedSession?.session_type === "Sprint Qualifying" || selectedSession?.session_type === "Sprint Shootout";
+  const isPractice = selectedSession?.session_type === "Practice";
 
   // Qualifying: segment times, cutoffs, and knockout positions (all dynamic)
   const qualiCutoffs = useMemo(() => {
@@ -511,7 +513,7 @@ export default function SessionAnalysisPage() {
                   ))}
                 </div>
               ) : (
-                <TimingBoard entries={replayTimingEntries} retiredDrivers={retiredDrivers} isQualifying={isQuali} knockoutPosition={qualiKnockoutPos} />
+                <TimingBoard entries={replayTimingEntries} retiredDrivers={retiredDrivers} isQualifying={isQuali} isPractice={isPractice} knockoutPosition={qualiKnockoutPos} />
               )}
             </div>
             {/* Race control — third on mobile, below map on desktop */}
