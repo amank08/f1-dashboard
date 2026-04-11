@@ -238,13 +238,16 @@ export function buildTimingData(
 
       if (lap.is_pit_out_lap || !isLapCompleteByReplay(lap, replayTimestamp)) continue;
 
+      const lapDuration = lap.lap_duration;
+      if (lapDuration == null) continue;
+
       previousCompletedLap = lastCompletedLap;
       lastCompletedLap = lap;
-      lastLap.set(dn, lap.lap_duration);
+      lastLap.set(dn, lapDuration);
 
       const currentBest = bestLap.get(dn);
-      if (!currentBest || lap.lap_duration < currentBest) {
-        bestLap.set(dn, lap.lap_duration);
+      if (!currentBest || lapDuration < currentBest) {
+        bestLap.set(dn, lapDuration);
       }
     }
 
