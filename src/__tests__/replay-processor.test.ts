@@ -191,7 +191,8 @@ describe("getRetiredDrivers", () => {
         Date.parse("2026-03-14T05:10:00.000Z"),
         false,
         [],
-        positions
+        positions,
+        "Race"
       )
     ).toEqual(new Map([[2, "DNS"]]));
   });
@@ -217,9 +218,37 @@ describe("getRetiredDrivers", () => {
         Date.parse("2026-03-14T05:15:30.000Z"),
         false,
         [],
-        positions
+        positions,
+        "Race"
       )
     ).toEqual(new Map([[2, "OUT"]]));
+  });
+
+  it("does not mark practice drivers as OUT", () => {
+    const timing: ReplayTimingSnapshot[] = [
+      { driverNumber: 1, position: 1, currentLap: 20 },
+      { driverNumber: 2, position: 2, currentLap: 10 },
+    ];
+    const positions = [
+      position("2026-03-14T05:00:00.000Z", 1, 1),
+      position("2026-03-14T05:00:00.000Z", 2, 2),
+    ];
+    const laps = [
+      lap("2026-03-14T05:15:00.000Z", 1, 20),
+      lap("2026-03-14T05:10:00.000Z", 2, 10),
+    ];
+
+    expect(
+      getRetiredDrivers(
+        timing,
+        laps,
+        Date.parse("2026-03-14T05:15:30.000Z"),
+        false,
+        [],
+        positions,
+        "Practice"
+      )
+    ).toEqual(new Map());
   });
 
   it("marks Q1 eliminations after the 90 second buffer, including no-data drivers", () => {
@@ -244,7 +273,8 @@ describe("getRetiredDrivers", () => {
       Date.parse("2026-03-14T05:19:31.000Z"),
       true,
       raceControl,
-      positions
+      positions,
+      "Qualifying"
     );
 
     expect(retired.get(20)).toBe("Q1");

@@ -300,7 +300,8 @@ export function getRetiredDrivers(
   replayTime: number | null,
   isQualifyingSession: boolean,
   raceControl: RaceControlMessage[],
-  positions: Position[]
+  positions: Position[],
+  sessionType?: string
 ): Map<number, string> {
   const map = new Map<number, string>();
   if (replayTimingEntries.length === 0) return map;
@@ -355,6 +356,9 @@ export function getRetiredDrivers(
 
     return map;
   }
+
+  const isRaceLikeSession = sessionType === "Race" || sessionType === "Sprint";
+  if (!isRaceLikeSession) return map;
 
   const leaderEntry = replayTimingEntries.find((e) => e.position === 1);
   const leaderLap = leaderEntry?.currentLap ?? 0;
