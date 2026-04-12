@@ -28,6 +28,7 @@ interface SessionReplayProps {
 }
 
 const LAP_SESSION_TYPES = new Set(["Race", "Sprint"]);
+const TIMING_SYNC_INTERVAL_MS = 100;
 
 export function SessionReplay({
   sessionKey,
@@ -163,7 +164,7 @@ export function SessionReplay({
     return getPhaseLabel(replay.currentTime, phases, laps);
   }, [useLapSkips, currentLap, totalLaps, replay.currentTime, phases, laps]);
 
-  // Throttled time reporting to parent (~2 updates/sec for sidebar sync)
+  // Throttled time reporting to parent (~10 updates/sec for sidebar sync)
   // Uses trailing-edge fallback so the latest value is always delivered,
   // even when the replay is paused or data loads within the throttle window.
   const lastReportRef = useRef(0);
@@ -172,14 +173,14 @@ export function SessionReplay({
 
     const now = performance.now();
 
-    if (now - lastReportRef.current >= 500) {
+    if (now - lastReportRef.current >= TIMING_SYNC_INTERVAL_MS) {
       lastReportRef.current = now;
       onTimeChange(replay.currentTime);
       return;
     }
 
     // Schedule a trailing call so we never permanently drop an update
-    const remaining = 500 - (now - lastReportRef.current);
+    const remaining = TIMING_SYNC_INTERVAL_MS - (now - lastReportRef.current);
     const timerId = setTimeout(() => {
       lastReportRef.current = performance.now();
       onTimeChange(replay.currentTime);

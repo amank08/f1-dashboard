@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Driver, Interval, LapData, Position, RaceControlMessage, Stint } from "@/lib/openf1/types";
 import { buildTimingData } from "@/components/live/timing-board";
 import {
+  buildReplaySessionIndex,
   buildReplayTimingEntries,
   filterDeletedLapTimes,
   filterReplayRaceControl,
@@ -152,6 +153,70 @@ describe("buildReplayTimingEntries", () => {
     expect(entries[0].position).toBe(1);
     expect(entries[0].currentLap).toBe(2);
     expect(entries[0].bestLap).toBe(89);
+  });
+
+  it("matches the indexed replay path to the non-indexed qualifying replay output", () => {
+    const drivers = [driver(4, "NOR"), driver(81, "PIA")];
+    const positions = [
+      position("2026-03-14T05:05:00.000Z", 4, 1),
+      position("2026-03-14T05:05:00.000Z", 81, 2),
+      position("2026-03-14T05:30:00.000Z", 4, 2),
+      position("2026-03-14T05:30:00.000Z", 81, 1),
+    ];
+    const intervals = [
+      interval("2026-03-14T05:05:00.000Z", 4, 0),
+      interval("2026-03-14T05:05:00.000Z", 81, 0.5),
+      interval("2026-03-14T05:30:00.000Z", 4, 1.2),
+      interval("2026-03-14T05:30:00.000Z", 81, 0),
+    ];
+    const stints = [stint(4, 1, 4), stint(81, 1, 4)];
+    const laps = [
+      lap(4, 1, "2026-03-14T05:10:00.000Z", 90),
+      lap(81, 1, "2026-03-14T05:10:10.000Z", 91),
+      lap(4, 2, "2026-03-14T05:28:00.000Z", 89),
+      lap(81, 2, "2026-03-14T05:28:10.000Z", 88.5),
+      lap(4, 3, "2026-03-14T05:50:00.000Z", 88),
+    ];
+    const raceControl = [
+      msg("2026-03-14T05:00:00.000Z", "SESSION STARTED"),
+      { ...msg("2026-03-14T05:18:00.000Z", "CHEQUERED FLAG"), category: "Other", flag: "CHEQUERED" },
+      msg("2026-03-14T05:25:00.000Z", "SESSION STARTED"),
+    ];
+    const replayTime = Date.parse("2026-03-14T05:35:00.000Z");
+    const replayIndex = buildReplaySessionIndex(
+      drivers,
+      positions,
+      intervals,
+      laps,
+      undefined,
+      raceControl
+    );
+
+    const withoutIndex = buildReplayTimingEntries(
+      drivers,
+      positions,
+      intervals,
+      stints,
+      laps,
+      undefined,
+      replayTime,
+      true,
+      raceControl
+    );
+    const withIndex = buildReplayTimingEntries(
+      drivers,
+      positions,
+      intervals,
+      stints,
+      laps,
+      undefined,
+      replayTime,
+      true,
+      raceControl,
+      replayIndex
+    );
+
+    expect(withIndex).toEqual(withoutIndex);
   });
 
   it("fills a completed sector's trailing mini-sector when the latest lap data is short", () => {
@@ -762,6 +827,77 @@ describe("buildReplayTimingEntries", () => {
     expect(entries[0].pitElapsed).toBeGreaterThan(0);
   });
 
+  it("does not leak a previous stop duration into a new pit event before the current pit row exists", () => {
+    const drivers = [driver(4, "NOR")];
+    const positions = [position("2026-03-14T05:30:05.000Z", 4, 1)];
+    const allLaps = [
+      {
+        ...lap(4, 1, "2026-03-14T05:00:00.000Z", 90),
+        duration_sector_1: 30,
+        duration_sector_2: 30,
+        duration_sector_3: 30,
+        segments_sector_1: [2049],
+        segments_sector_2: [2049],
+        segments_sector_3: [2064],
+      },
+      {
+        ...lap(4, 2, "2026-03-14T05:01:40.000Z", 92),
+        is_pit_out_lap: true,
+        duration_sector_1: 30,
+        segments_sector_1: [2064, 2049],
+        segments_sector_2: [],
+        segments_sector_3: [],
+      },
+      {
+        ...lap(4, 10, "2026-03-14T05:28:00.000Z", null),
+        duration_sector_1: 30,
+        duration_sector_2: 30,
+        duration_sector_3: 30,
+        segments_sector_1: [2049],
+        segments_sector_2: [2064],
+        segments_sector_3: [],
+      },
+    ];
+    const pitStops = [
+      {
+        date: "2026-03-14T05:01:15.000Z",
+        session_key: 1,
+        meeting_key: 1,
+        driver_number: 4,
+        lap_number: 1,
+        stop_duration: 2.4,
+        pit_duration: 24.1,
+        lane_duration: 24.1,
+      },
+      {
+        date: "2026-03-14T05:28:25.000Z",
+        session_key: 1,
+        meeting_key: 1,
+        driver_number: 4,
+        lap_number: 10,
+        stop_duration: 2.9,
+        pit_duration: 22.8,
+        lane_duration: 22.8,
+      },
+    ];
+
+    const entries = buildTimingData(
+      drivers,
+      positions,
+      [],
+      [],
+      [allLaps[2]],
+      pitStops,
+      Date.parse("2026-03-14T05:28:20.000Z"),
+      allLaps
+    );
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].isInPit).toBe(true);
+    expect(entries[0].pitStopTime).toBeNull();
+    expect(entries[0].pitLaneTime).toBeNull();
+  });
+
   it("keeps a driver marked in pit on the early out-lap before on-track mini-sectors appear", () => {
     const drivers = [driver(4, "NOR")];
     const positions = [position("2026-03-14T05:22:40.000Z", 4, 1)];
@@ -1036,7 +1172,71 @@ describe("buildReplayTimingEntries", () => {
     expect(entries[0].isInPit).toBe(false);
     expect(entries[0].showRecentPitTime).toBe(true);
     expect(entries[0].pitElapsed).toBeGreaterThan(20);
+    expect(entries[0].pitLaneTime).toBe(23.4);
     expect(entries[0].pitStopTime).toBe(2.7);
+  });
+
+  it("keeps the post-exit lane-duration hold for five and a half seconds before clearing", () => {
+    const drivers = [driver(81, "PIA")];
+    const positions = [position("2026-03-29T05:42:59.000Z", 81, 5)];
+    const allLaps = [
+      {
+        ...lap(81, 18, "2026-03-29T05:40:59.199000Z", 97.327),
+        duration_sector_1: 34.808,
+        duration_sector_2: 41.961,
+        duration_sector_3: 20.558,
+        segments_sector_1: [2048, 2049, 2048, 2048, 2048, 2048, 2048, 2048, 2048],
+        segments_sector_2: [2048, 2048, 2049, 2048, 2049, 2048, 2048, 2048, 2048, 2048, 2049],
+        segments_sector_3: [2049, 2048, 2048, 2048, 2064, 2064, 2064],
+      },
+      {
+        ...lap(81, 19, "2026-03-29T05:42:36.382000Z", 114.537),
+        is_pit_out_lap: true,
+        duration_sector_1: 54.877,
+        duration_sector_2: 41.678,
+        duration_sector_3: 17.982,
+        segments_sector_1: [2064, 2064, 2048, 2048, 2048, 2048, 2048, 2048, 2048],
+        segments_sector_2: [2048, 2049, 2049, 2048, 2051, 2048, 2048, 2048, 2048, 2049, 2049],
+        segments_sector_3: [2049, 2049, 2048, 2048, 2048, 2048, 2048],
+      },
+    ];
+    const pitStops = [
+      {
+        date: "2026-03-29T05:42:58.401000Z",
+        session_key: 1,
+        meeting_key: 1,
+        driver_number: 81,
+        lap_number: 18,
+        pit_duration: 23.4,
+        lane_duration: 23.4,
+        stop_duration: 2.7,
+      },
+    ];
+
+    const withinHold = buildTimingData(
+      drivers,
+      positions,
+      [],
+      [],
+      allLaps,
+      pitStops,
+      Date.parse("2026-03-29T05:43:03.500Z"),
+      allLaps
+    );
+    expect(withinHold[0].showRecentPitTime).toBe(true);
+    expect(withinHold[0].pitLaneTime).toBe(23.4);
+
+    const afterHold = buildTimingData(
+      drivers,
+      positions,
+      [],
+      [],
+      allLaps,
+      pitStops,
+      Date.parse("2026-03-29T05:43:03.902Z"),
+      allLaps
+    );
+    expect(afterHold[0].showRecentPitTime).toBe(false);
   });
 
   it("does not mark a driver as in pit or show a pit mini-sector too early when OpenF1 gives a sparse pit sector", () => {

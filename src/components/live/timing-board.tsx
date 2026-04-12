@@ -14,7 +14,18 @@ const SEGMENT_GREEN = 2049;
 const SEGMENT_PURPLE = 2051;
 const SEGMENT_PIT = 2064;
 const PIT_BOX_GRACE_SECONDS = 45;
-const PIT_EXIT_DISPLAY_HOLD_MS = 2500;
+const PIT_EXIT_DISPLAY_HOLD_MS = 5500;
+
+function upperBound(values: number[], target: number): number {
+  let lo = 0;
+  let hi = values.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (values[mid] <= target) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
 
 function getSegmentColor(value: number | null): string {
   switch (value) {
@@ -46,6 +57,14 @@ interface SectorBests {
   s1: number | null;
   s2: number | null;
   s3: number | null;
+}
+
+interface DriverLapPrefixState {
+  latestLapNum: number;
+  bestLap: number | null;
+  personalBestSectors: SectorBests;
+  lastCompletedIndex: number;
+  previousCompletedIndex: number;
 }
 
 function getLapSectors(lap: LapData): [number | null, number | null, number | null] {
@@ -278,6 +297,54 @@ function normalizeSegmentsForCircuit(
   return [...segments, ...padding];
 }
 
+function cloneSectorBests(value: SectorBests): SectorBests {
+  return { s1: value.s1, s2: value.s2, s3: value.s3 };
+}
+
+function buildDriverLapPrefixStates(laps: LapData[]): DriverLapPrefixState[] {
+  const states: DriverLapPrefixState[] = [];
+  let bestLap: number | null = null;
+  let personalBestSectors: SectorBests = { s1: null, s2: null, s3: null };
+  let lastCompletedIndex = -1;
+  let previousCompletedIndex = -1;
+  let latestLapNum = 0;
+
+  for (let i = 0; i < laps.length; i++) {
+    const lap = laps[i];
+    latestLapNum = Math.max(latestLapNum, lap.lap_number);
+
+    if (!lap.is_pit_out_lap) {
+      if (lap.duration_sector_1 != null && (personalBestSectors.s1 == null || lap.duration_sector_1 < personalBestSectors.s1)) {
+        personalBestSectors = { ...personalBestSectors, s1: lap.duration_sector_1 };
+      }
+      if (lap.duration_sector_2 != null && (personalBestSectors.s2 == null || lap.duration_sector_2 < personalBestSectors.s2)) {
+        personalBestSectors = { ...personalBestSectors, s2: lap.duration_sector_2 };
+      }
+      if (lap.duration_sector_3 != null && (personalBestSectors.s3 == null || lap.duration_sector_3 < personalBestSectors.s3)) {
+        personalBestSectors = { ...personalBestSectors, s3: lap.duration_sector_3 };
+      }
+    }
+
+    if (!lap.is_pit_out_lap && lap.lap_duration != null) {
+      previousCompletedIndex = lastCompletedIndex;
+      lastCompletedIndex = i;
+      if (bestLap == null || lap.lap_duration < bestLap) {
+        bestLap = lap.lap_duration;
+      }
+    }
+
+    states.push({
+      latestLapNum,
+      bestLap,
+      personalBestSectors: cloneSectorBests(personalBestSectors),
+      lastCompletedIndex,
+      previousCompletedIndex,
+    });
+  }
+
+  return states;
+}
+
 export interface TimingEntry {
   position: number;
   gridPosition: number | null;
@@ -310,7 +377,12 @@ export interface TimingDataPreparedInput {
   sortedPositions: Position[];
   sortedIntervals: Interval[];
   lapsByDriver: Map<number, LapData[]>;
+  lapStartTimesByDriver: Map<number, number[]>;
+  allLapsByDriver: Map<number, LapData[]>;
+  allLapStartTimesByDriver: Map<number, number[]>;
+  lapPrefixStateByDriver: Map<number, DriverLapPrefixState[]>;
   pitStopsByDriver: Map<number, PitStop[]>;
+  pitStopTimesByDriver: Map<number, number[]>;
   sortedRaceControl: RaceControlMessage[];
   sectorCounts: [number, number, number];
 }
@@ -345,15 +417,46 @@ export function buildTimingDataPreparedInput(
     driverLaps.push(lap);
     lapsByDriver.set(lap.driver_number, driverLaps);
   }
+  const lapStartTimesByDriver = new Map<number, number[]>();
   for (const [driverNumber, driverLaps] of lapsByDriver) {
-    lapsByDriver.set(
-      driverNumber,
-      [...driverLaps].sort((a, b) => {
+    const sortedDriverLaps = [...driverLaps].sort((a, b) => {
         const lapDiff = a.lap_number - b.lap_number;
         if (lapDiff !== 0) return lapDiff;
         return new Date(a.date_start).getTime() - new Date(b.date_start).getTime();
-      })
+      });
+    lapsByDriver.set(driverNumber, sortedDriverLaps);
+    lapStartTimesByDriver.set(
+      driverNumber,
+      sortedDriverLaps.map((lap) =>
+        lap.date_start ? new Date(lap.date_start).getTime() : Number.POSITIVE_INFINITY
+      )
     );
+  }
+
+  const allLapsByDriver = new Map<number, LapData[]>();
+  for (const lap of allLaps ?? laps) {
+    const driverLaps = allLapsByDriver.get(lap.driver_number) ?? [];
+    driverLaps.push(lap);
+    allLapsByDriver.set(lap.driver_number, driverLaps);
+  }
+  const allLapStartTimesByDriver = new Map<number, number[]>();
+  for (const [driverNumber, driverLaps] of allLapsByDriver) {
+    const sortedDriverLaps = [...driverLaps].sort((a, b) => {
+      const lapDiff = a.lap_number - b.lap_number;
+      if (lapDiff !== 0) return lapDiff;
+      return new Date(a.date_start).getTime() - new Date(b.date_start).getTime();
+    });
+    allLapsByDriver.set(driverNumber, sortedDriverLaps);
+    allLapStartTimesByDriver.set(
+      driverNumber,
+      sortedDriverLaps.map((lap) =>
+        lap.date_start ? new Date(lap.date_start).getTime() : Number.POSITIVE_INFINITY
+      )
+    );
+  }
+  const lapPrefixStateByDriver = new Map<number, DriverLapPrefixState[]>();
+  for (const [driverNumber, driverLaps] of allLapsByDriver) {
+    lapPrefixStateByDriver.set(driverNumber, buildDriverLapPrefixStates(driverLaps));
   }
 
   const pitStopsByDriver = new Map<number, PitStop[]>();
@@ -366,6 +469,13 @@ export function buildTimingDataPreparedInput(
     pitStopsByDriver.set(
       driverNumber,
       [...driverPitStops].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    );
+  }
+  const pitStopTimesByDriver = new Map<number, number[]>();
+  for (const [driverNumber, driverPitStops] of pitStopsByDriver) {
+    pitStopTimesByDriver.set(
+      driverNumber,
+      driverPitStops.map((pit) => new Date(pit.date).getTime())
     );
   }
 
@@ -400,7 +510,12 @@ export function buildTimingDataPreparedInput(
     sortedPositions,
     sortedIntervals,
     lapsByDriver,
+    lapStartTimesByDriver,
+    allLapsByDriver,
+    allLapStartTimesByDriver,
+    lapPrefixStateByDriver,
     pitStopsByDriver,
+    pitStopTimesByDriver,
     sortedRaceControl,
     sectorCounts,
   };
@@ -528,53 +643,91 @@ export function buildTimingData(
       if (lapDiff !== 0) return lapDiff;
       return new Date(a.date_start).getTime() - new Date(b.date_start).getTime();
     });
+    const allDriverLaps = prepared?.allLapsByDriver.get(dn) ?? sortedLaps;
+    const lapPrefixStates = prepared?.lapPrefixStateByDriver.get(dn);
+    const currentDisplayLap = sortedLaps[sortedLaps.length - 1] ?? null;
+    if (!currentDisplayLap) continue;
+    const canUsePrefixState =
+      replayTimestamp != null &&
+      prepared != null &&
+      lapPrefixStates != null &&
+      sortedLaps.length > 0 &&
+      sortedLaps[0] === allDriverLaps[0] &&
+      currentDisplayLap === allDriverLaps[sortedLaps.length - 1];
 
     const pb: SectorBests = { s1: null, s2: null, s3: null };
     let lastCompletedLap: LapData | null = null;
     let previousCompletedLap: LapData | null = null;
+    if (canUsePrefixState) {
+      const priorState = sortedLaps.length > 1 ? lapPrefixStates[sortedLaps.length - 2] : null;
+      if (priorState) {
+        pb.s1 = priorState.personalBestSectors.s1;
+        pb.s2 = priorState.personalBestSectors.s2;
+        pb.s3 = priorState.personalBestSectors.s3;
+        if (priorState.lastCompletedIndex >= 0) {
+          lastCompletedLap = allDriverLaps[priorState.lastCompletedIndex] ?? null;
+          if (lastCompletedLap?.lap_duration != null) lastLap.set(dn, lastCompletedLap.lap_duration);
+        }
+        if (priorState.previousCompletedIndex >= 0) {
+          previousCompletedLap = allDriverLaps[priorState.previousCompletedIndex] ?? null;
+        }
+        if (priorState.bestLap != null) bestLap.set(dn, priorState.bestLap);
+      }
+      latestLapNum.set(dn, currentDisplayLap.lap_number);
 
-    for (const lap of sortedLaps) {
-      latestLapNum.set(dn, Math.max(latestLapNum.get(dn) ?? 0, lap.lap_number));
-
-      if (!lap.is_pit_out_lap) {
-        if (isSectorCompleteByReplay(lap, 0, replayTimestamp) && lap.duration_sector_1 !== null && (pb.s1 === null || lap.duration_sector_1 < pb.s1)) pb.s1 = lap.duration_sector_1;
-        if (isSectorCompleteByReplay(lap, 1, replayTimestamp) && lap.duration_sector_2 !== null && (pb.s2 === null || lap.duration_sector_2 < pb.s2)) pb.s2 = lap.duration_sector_2;
-        if (isSectorCompleteByReplay(lap, 2, replayTimestamp) && lap.duration_sector_3 !== null && (pb.s3 === null || lap.duration_sector_3 < pb.s3)) pb.s3 = lap.duration_sector_3;
+      if (!currentDisplayLap.is_pit_out_lap) {
+        if (isSectorCompleteByReplay(currentDisplayLap, 0, replayTimestamp) && currentDisplayLap.duration_sector_1 !== null && (pb.s1 === null || currentDisplayLap.duration_sector_1 < pb.s1)) pb.s1 = currentDisplayLap.duration_sector_1;
+        if (isSectorCompleteByReplay(currentDisplayLap, 1, replayTimestamp) && currentDisplayLap.duration_sector_2 !== null && (pb.s2 === null || currentDisplayLap.duration_sector_2 < pb.s2)) pb.s2 = currentDisplayLap.duration_sector_2;
+        if (isSectorCompleteByReplay(currentDisplayLap, 2, replayTimestamp) && currentDisplayLap.duration_sector_3 !== null && (pb.s3 === null || currentDisplayLap.duration_sector_3 < pb.s3)) pb.s3 = currentDisplayLap.duration_sector_3;
       }
 
-      if (lap.is_pit_out_lap || !isLapCompleteByReplay(lap, replayTimestamp)) continue;
+      if (!currentDisplayLap.is_pit_out_lap && isLapCompleteByReplay(currentDisplayLap, replayTimestamp) && currentDisplayLap.lap_duration != null) {
+        previousCompletedLap = lastCompletedLap;
+        lastCompletedLap = currentDisplayLap;
+        lastLap.set(dn, currentDisplayLap.lap_duration);
+        const currentBest = bestLap.get(dn);
+        if (currentBest == null || currentDisplayLap.lap_duration < currentBest) {
+          bestLap.set(dn, currentDisplayLap.lap_duration);
+        }
+      }
+    } else {
+      for (const lap of sortedLaps) {
+        latestLapNum.set(dn, Math.max(latestLapNum.get(dn) ?? 0, lap.lap_number));
 
-      const lapDuration = lap.lap_duration;
-      if (lapDuration == null) continue;
+        if (!lap.is_pit_out_lap) {
+          if (isSectorCompleteByReplay(lap, 0, replayTimestamp) && lap.duration_sector_1 !== null && (pb.s1 === null || lap.duration_sector_1 < pb.s1)) pb.s1 = lap.duration_sector_1;
+          if (isSectorCompleteByReplay(lap, 1, replayTimestamp) && lap.duration_sector_2 !== null && (pb.s2 === null || lap.duration_sector_2 < pb.s2)) pb.s2 = lap.duration_sector_2;
+          if (isSectorCompleteByReplay(lap, 2, replayTimestamp) && lap.duration_sector_3 !== null && (pb.s3 === null || lap.duration_sector_3 < pb.s3)) pb.s3 = lap.duration_sector_3;
+        }
 
-      previousCompletedLap = lastCompletedLap;
-      lastCompletedLap = lap;
-      lastLap.set(dn, lapDuration);
+        if (lap.is_pit_out_lap || !isLapCompleteByReplay(lap, replayTimestamp)) continue;
 
-      const currentBest = bestLap.get(dn);
-      if (!currentBest || lapDuration < currentBest) {
-        bestLap.set(dn, lapDuration);
+        const lapDuration = lap.lap_duration;
+        if (lapDuration == null) continue;
+
+        previousCompletedLap = lastCompletedLap;
+        lastCompletedLap = lap;
+        lastLap.set(dn, lapDuration);
+
+        const currentBest = bestLap.get(dn);
+        if (!currentBest || lapDuration < currentBest) {
+          bestLap.set(dn, lapDuration);
+        }
       }
     }
 
     personalBestSectors.set(dn, pb);
-
-    const currentDisplayLap = sortedLaps[sortedLaps.length - 1] ?? null;
-    if (!currentDisplayLap) continue;
 
     const rawCurrentSegments = getLapSegments(currentDisplayLap);
     const currentSegments = rawCurrentSegments.map((sector, index) =>
       normalizeSegmentsForCircuit(sector, sectorCounts[index])
     ) as (number | null)[][];
 
-    if (activeChequeredAt != null) {
-      const completedAfterChequered = sortedLaps.some((lap) => {
-        if (lap.is_pit_out_lap || !isLapCompleteByReplay(lap, replayTimestamp)) return false;
-        const lapDuration = lap.lap_duration;
-        if (lapDuration == null) return false;
-        return getLapStartMs(lap) + lapDuration * 1000 >= activeChequeredAt;
-      });
-      hasTakenChequered.set(dn, completedAfterChequered);
+    if (activeChequeredAt != null && lastCompletedLap?.lap_duration != null) {
+      hasTakenChequered.set(
+        dn,
+        getLapStartMs(lastCompletedLap) + lastCompletedLap.lap_duration * 1000 >= activeChequeredAt
+      );
     }
 
     const carryOverLap =
@@ -591,19 +744,30 @@ export function buildTimingData(
     const pitStopForLap = prepared?.pitStopsByDriver.get(dn) ?? [...(pitStops ?? [])]
       .filter((pit) => pit.driver_number === dn)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const pitStopTimes = prepared?.pitStopTimesByDriver.get(dn) ?? pitStopForLap.map((pit) => new Date(pit.date).getTime());
     let latestPitStop: PitStop | undefined;
-    for (let i = pitStopForLap.length - 1; i >= 0; i--) {
-      const pit = pitStopForLap[i];
-      if (replayTimestamp == null || new Date(pit.date).getTime() <= replayTimestamp) {
-        latestPitStop = pit;
-        break;
-      }
+    if (pitStopForLap.length > 0) {
+      const latestPitStopIndex =
+        replayTimestamp == null
+          ? pitStopForLap.length - 1
+          : upperBound(pitStopTimes, replayTimestamp) - 1;
+      latestPitStop = latestPitStopIndex >= 0 ? pitStopForLap[latestPitStopIndex] : undefined;
     }
+    let visiblePitStopForDisplay: PitStop | undefined = replayTimestamp == null ? latestPitStop : undefined;
 
     let pitFlag = false;
     if (replayTimestamp != null) {
+      const allDriverLapTimes = prepared?.allLapStartTimesByDriver.get(dn) ?? allDriverLaps.map((lap) => new Date(lap.date_start).getTime());
       const pitInLap = currentDisplayLap.is_pit_out_lap
-        ? [...sortedLaps].reverse().find((lap) => !lap.is_pit_out_lap && getLapStartMs(lap) < getLapStartMs(currentDisplayLap)) ?? null
+        ? (() => {
+            let candidateIndex = upperBound(allDriverLapTimes, getLapStartMs(currentDisplayLap) - 1) - 1;
+            while (candidateIndex >= 0) {
+              const candidate = allDriverLaps[candidateIndex];
+              if (!candidate.is_pit_out_lap) return candidate;
+              candidateIndex -= 1;
+            }
+            return null;
+          })()
         : currentDisplayLap;
 
       if (pitInLap) {
@@ -628,14 +792,16 @@ export function buildTimingData(
           const authoritativePitStop = pitStopForLap.find(
             (pit) => pit.lap_number === pitInLap.lap_number
           );
+          if (
+            authoritativePitStop &&
+            new Date(authoritativePitStop.date).getTime() <= replayTimestamp
+          ) {
+            visiblePitStopForDisplay = authoritativePitStop;
+          }
           const authoritativeLaneDuration =
             authoritativePitStop?.lane_duration ?? authoritativePitStop?.pit_duration ?? null;
-          const outLap = (allLaps ?? laps).find(
-            (lap) =>
-              lap.driver_number === dn &&
-              lap.is_pit_out_lap &&
-              getLapStartMs(lap) > getLapStartMs(pitInLap)
-          );
+          const outLapIndex = upperBound(allDriverLapTimes, getLapStartMs(pitInLap));
+          const outLap = allDriverLaps.slice(outLapIndex).find((lap) => lap.is_pit_out_lap);
 
           if (
             authoritativePitStop
@@ -734,8 +900,8 @@ export function buildTimingData(
       }
     }
     inPit.set(dn, pitFlag);
-    pitLaneTime.set(dn, latestPitStop?.lane_duration ?? latestPitStop?.pit_duration ?? null);
-    pitStopTime.set(dn, latestPitStop?.stop_duration ?? null);
+    pitLaneTime.set(dn, visiblePitStopForDisplay?.lane_duration ?? visiblePitStopForDisplay?.pit_duration ?? null);
+    pitStopTime.set(dn, visiblePitStopForDisplay?.stop_duration ?? null);
     if (currentDisplayLap.is_pit_out_lap) {
       latestSectors.set(dn, [null, null, null]);
       latestSegments.set(dn, [[], [], []]);
@@ -998,13 +1164,6 @@ function formatSeconds(value: number | null): string {
   return `${value.toFixed(1)}s`;
 }
 
-function formatPitSummary(
-  pitLaneTime: number | null,
-  pitStopTime: number | null
-): string {
-  return `LANE ${formatSeconds(pitLaneTime)} STOP ${formatSeconds(pitStopTime)}`;
-}
-
 function RaceGapCell({
   position,
   interval,
@@ -1027,19 +1186,22 @@ function RaceGapCell({
   showRecentPitTime: boolean;
 }) {
   if (isInPit || showRecentPitTime) {
-    const primaryPitValue =
-      showRecentPitTime && pitStopTime != null
-        ? pitStopTime
-        : pitElapsed;
+    const primaryPitValue = showRecentPitTime
+      ? (pitLaneTime ?? pitElapsed)
+      : pitElapsed;
+    const secondaryText = pitStopTime != null
+      ? `STOP ${formatSeconds(pitStopTime)}`
+      : (showRecentPitTime ? "PIT EXIT" : "PIT");
+    const secondaryClassName = pitStopTime != null
+      ? "font-mono text-[11px] font-semibold text-f1-text"
+      : "font-mono text-[10px] text-f1-text-muted";
     return (
       <div className="flex min-w-[5.5rem] flex-col items-center justify-center gap-1 leading-none">
         <span className="font-mono text-[13px] font-semibold text-blue-400">
           {formatSeconds(primaryPitValue)}
         </span>
-        <span className="font-mono text-[10px] text-f1-text-muted">
-          {isInPit
-            ? formatPitSummary(pitLaneTime, pitStopTime)
-            : "PIT EXIT"}
+        <span className={secondaryClassName}>
+          {secondaryText}
         </span>
       </div>
     );
