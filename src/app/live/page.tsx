@@ -11,6 +11,7 @@ import { useStints } from "@/lib/hooks/use-stints";
 import { useLaps } from "@/lib/hooks/use-laps";
 import { useDrivers } from "@/lib/hooks/use-drivers";
 import { useRaceControl } from "@/lib/hooks/use-race-control";
+import { usePitStops } from "@/lib/hooks/use-pit-stops";
 import { PageHeader } from "@/components/layout/page-header";
 import { SeasonSelector } from "@/components/selectors/season-selector";
 import { ResultsTable, buildResults } from "@/components/tables/results-table";
@@ -196,6 +197,7 @@ export default function SessionAnalysisPage() {
   const { data: laps, error: lapErr } = useLaps(sessionKey, undefined, isLiveSession);
   const { data: drivers, error: drvErr } = useDrivers(sessionKey);
   const { data: raceControl } = useRaceControl(sessionKey, isLiveSession);
+  const { data: pitStops } = usePitStops(sessionKey);
 
   // Filter out deleted lap times using race control messages.
   // Match by driver + lap time (seconds) rather than lap number, because
@@ -235,11 +237,12 @@ export default function SessionAnalysisPage() {
       intervals ?? [],
       stints ?? [],
       laps,
+      pitStops,
       replayTime,
       isQuali,
       raceControl
     );
-  }, [replayTime, drivers, positions, intervals, stints, laps, isQuali, raceControl]);
+  }, [replayTime, drivers, positions, intervals, stints, laps, pitStops, isQuali, raceControl]);
 
   // Detect retired/eliminated drivers from timing entries.
   // Race: DNF if lap count <90% of leader and no recent laps (3 min).
@@ -504,8 +507,19 @@ export default function SessionAnalysisPage() {
                 </div>
               )}
             </div>
-            {/* Timing board — second on mobile, right column on desktop */}
+            {/* Race control — second on mobile, right column on desktop */}
             <div className="order-2 space-y-4 lg:col-start-2 lg:row-start-1 lg:row-span-2">
+              <h3 className="text-sm font-semibold uppercase text-f1-text-muted">
+                Race Control
+              </h3>
+              {raceControl ? (
+                <RaceControlFeed messages={replayRaceControl} />
+              ) : (
+                <Skeleton className="h-64" />
+              )}
+            </div>
+            {/* Timing board — third on mobile, below map on desktop */}
+            <div className="order-3 space-y-4 lg:col-start-1 lg:row-start-2">
               {dataLoading ? (
                 <div className="space-y-2">
                   {Array.from({ length: 20 }).map((_, i) => (
@@ -514,17 +528,6 @@ export default function SessionAnalysisPage() {
                 </div>
               ) : (
                 <TimingBoard entries={replayTimingEntries} retiredDrivers={retiredDrivers} isQualifying={isQuali} isPractice={isPractice} knockoutPosition={qualiKnockoutPos} />
-              )}
-            </div>
-            {/* Race control — third on mobile, below map on desktop */}
-            <div className="order-3 space-y-4 lg:col-start-1 lg:row-start-2">
-              <h3 className="text-sm font-semibold uppercase text-f1-text-muted">
-                Race Control
-              </h3>
-              {raceControl ? (
-                <RaceControlFeed messages={replayRaceControl} />
-              ) : (
-                <Skeleton className="h-64" />
               )}
             </div>
           </div>

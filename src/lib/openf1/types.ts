@@ -73,6 +73,7 @@ export interface PitStop {
   lap_number: number;
   stop_duration: number | null;
   pit_duration: number | null;
+  lane_duration?: number | null;
 }
 
 export interface Stint {

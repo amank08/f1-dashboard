@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { motion } from "framer-motion";
-import type { Driver, Position, Interval, Stint, LapData, RaceControlMessage } from "@/lib/openf1/types";
+import type { Driver, Position, Interval, Stint, LapData, RaceControlMessage, PitStop } from "@/lib/openf1/types";
 import { getTeamColor, getTeamLogoUrl, getTeamLogoStyle } from "@/lib/utils/colors";
 import { TyreIcon } from "@/components/ui/tyre-icon";
 import { formatLapTime } from "@/lib/utils/formatters";
@@ -13,6 +13,8 @@ const SEGMENT_YELLOW = 2048;
 const SEGMENT_GREEN = 2049;
 const SEGMENT_PURPLE = 2051;
 const SEGMENT_PIT = 2064;
+const PIT_BOX_GRACE_SECONDS = 45;
+const PIT_EXIT_DISPLAY_HOLD_MS = 2500;
 
 function getSegmentColor(value: number | null): string {
   switch (value) {
@@ -64,24 +66,40 @@ function getLapStartMs(lap: LapData): number {
   return new Date(lap.date_start).getTime();
 }
 
+function withFallbackSectorDurations(
+  current: [number | null, number | null, number | null],
+  previous?: [number | null, number | null, number | null],
+  personalBest?: SectorBests
+): [number | null, number | null, number | null] {
+  return current.map((value, index) => {
+    if (value != null && value > 0) return value;
+    const previousValue = previous?.[index] ?? null;
+    if (previousValue != null && previousValue > 0) return previousValue;
+    const pbValue =
+      index === 0 ? personalBest?.s1 ?? null :
+      index === 1 ? personalBest?.s2 ?? null :
+                    personalBest?.s3 ?? null;
+    return pbValue != null && pbValue > 0 ? pbValue : null;
+  }) as [number | null, number | null, number | null];
+}
+
 function isPitSegmentReached(
-  lap: LapData,
+  lapStartMs: number,
+  sectorDurations: [number | null, number | null, number | null],
   segments: (number | null)[][],
-  replayTimestamp: number | null | undefined
+  replayTimestamp: number | null | undefined,
+  sectorCounts?: [number, number, number]
 ): boolean {
   if (replayTimestamp == null) {
     return segments.some((sector) => sector.some((segment) => segment === SEGMENT_PIT));
   }
 
-  const elapsed = (replayTimestamp - getLapStartMs(lap)) / 1000;
-  const d1 = lap.duration_sector_1;
-  const d2 = lap.duration_sector_2;
-  const d3 = lap.duration_sector_3;
-  const sectorDurations = [d1, d2, d3] as const;
+  const elapsed = (replayTimestamp - lapStartMs) / 1000;
+  const [d1, d2] = sectorDurations;
 
   for (let si = 0; si < 3; si++) {
     const sector = segments[si];
-    const sectorLen = sector.length;
+    const sectorLen = sectorCounts?.[si] ?? sector.length;
     if (sectorLen === 0) continue;
 
     const sectorStart =
@@ -96,8 +114,102 @@ function isPitSegmentReached(
       const segStart =
         sectorDuration != null
           ? sectorStart + (pi / sectorLen) * sectorDuration
-          : sectorStart;
+          : Infinity;
       if (elapsed >= segStart) return true;
+    }
+  }
+
+  return false;
+}
+
+function getPitSegmentStartSeconds(
+  sectorDurations: [number | null, number | null, number | null],
+  segments: (number | null)[][],
+  sectorCounts?: [number, number, number]
+): number | null {
+  const [d1, d2] = sectorDurations;
+  for (let si = 0; si < 3; si++) {
+    const sector = segments[si];
+    const sectorLen = sectorCounts?.[si] ?? sector.length;
+    if (sectorLen === 0) continue;
+
+    const sectorStart =
+      si === 0 ? 0 :
+      si === 1 ? (d1 ?? Infinity) :
+                 (d1 ?? Infinity) + (d2 ?? Infinity);
+    const sectorDuration = sectorDurations[si];
+    if (sectorDuration == null) continue;
+
+    for (let pi = 0; pi < sectorLen; pi++) {
+      if (sector[pi] !== SEGMENT_PIT) continue;
+      return sectorStart + (pi / sectorLen) * sectorDuration;
+    }
+  }
+  return null;
+}
+
+function getPitSegmentEndSeconds(
+  sectorDurations: [number | null, number | null, number | null],
+  segments: (number | null)[][],
+  sectorCounts?: [number, number, number]
+): number | null {
+  const [d1, d2] = sectorDurations;
+  let lastEnd: number | null = null;
+
+  for (let si = 0; si < 3; si++) {
+    const sector = segments[si];
+    const sectorLen = sectorCounts?.[si] ?? sector.length;
+    if (sectorLen === 0) continue;
+
+    const sectorStart =
+      si === 0 ? 0 :
+      si === 1 ? (d1 ?? Infinity) :
+                 (d1 ?? Infinity) + (d2 ?? Infinity);
+    const sectorDuration = sectorDurations[si];
+    if (sectorDuration == null) continue;
+
+    for (let pi = 0; pi < sectorLen; pi++) {
+      if (sector[pi] !== SEGMENT_PIT) continue;
+      lastEnd = sectorStart + ((pi + 1) / sectorLen) * sectorDuration;
+    }
+  }
+
+  return lastEnd;
+}
+
+function hasVisibleNonPitSegmentsByReplay(
+  lapStartMs: number,
+  sectorDurations: [number | null, number | null, number | null],
+  segments: (number | null)[][],
+  replayTimestamp: number | null | undefined,
+  sectorCounts?: [number, number, number]
+): boolean {
+  if (replayTimestamp == null) {
+    return segments.some((sector) => sector.some((segment) => segment != null && segment !== SEGMENT_PIT));
+  }
+
+  const elapsed = (replayTimestamp - lapStartMs) / 1000;
+  const [d1, d2] = sectorDurations;
+
+  for (let si = 0; si < 3; si++) {
+    const sector = segments[si];
+    const sectorLen = sectorCounts?.[si] ?? sector.length;
+    if (sectorLen === 0) continue;
+
+    const sectorStart =
+      si === 0 ? 0 :
+      si === 1 ? (d1 ?? Infinity) :
+                 (d1 ?? Infinity) + (d2 ?? Infinity);
+    const sectorDuration = sectorDurations[si];
+    if (elapsed < sectorStart || sectorDuration == null || sectorDuration <= 0) continue;
+
+    const visibleCount =
+      elapsed >= sectorStart + sectorDuration
+        ? sectorLen
+        : Math.max(0, Math.min(sectorLen, Math.floor(((elapsed - sectorStart) / sectorDuration) * sectorLen)));
+
+    for (let pi = 0; pi < visibleCount; pi++) {
+      if (sector[pi] != null && sector[pi] !== SEGMENT_PIT) return true;
     }
   }
 
@@ -148,14 +260,39 @@ function fillCompletedSectorGaps(
   return normalized.map((value, index) => (index > lastKnownIndex && value === null ? lastKnown : value));
 }
 
+function normalizeSegmentsForCircuit(
+  segments: (number | null)[],
+  expectedCount: number
+): (number | null)[] {
+  if (expectedCount === 0) return segments;
+  if (segments.length >= expectedCount) return segments.slice(0, expectedCount);
+
+  const padding = Array<null>(expectedCount - segments.length).fill(null);
+  if (segments.includes(SEGMENT_PIT)) {
+    // Sparse pit sectors from OpenF1 often collapse to the terminal pit marker
+    // rather than preserving earlier on-track mini-sectors. Right-align them so
+    // replay does not show PIT as soon as the sector begins.
+    return [...padding, ...segments];
+  }
+
+  return [...segments, ...padding];
+}
+
 export interface TimingEntry {
   position: number;
+  gridPosition: number | null;
+  positionDelta: number | null;
   driverNumber: number;
   acronym: string;
   teamColour: string;
   teamName: string;
   interval: number | string | null;
   gapToLeader: number | string | null;
+  isClosingToAhead: boolean;
+  pitElapsed: number | null;
+  pitLaneTime: number | null;
+  pitStopTime: number | null;
+  showRecentPitTime: boolean;
   lastLap: number | null;
   bestLap: number | null;
   compound: string | null;
@@ -174,6 +311,7 @@ export function buildTimingData(
   intervals: Interval[],
   stints: Stint[],
   laps: LapData[],
+  pitStops?: PitStop[],
   replayTimestamp?: number | null,
   /** Full unfiltered laps — used to compute a stable mini-sector grid
    *  layout that doesn't shift as the replay progresses. Only needed
@@ -183,22 +321,36 @@ export function buildTimingData(
 ): TimingEntry[] {
   // Get latest position per driver
   const latestPos = new Map<number, number>();
+  const gridPos = new Map<number, number>();
   const sortedPositions = [...positions].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   );
   for (const p of sortedPositions) {
+    if (!gridPos.has(p.driver_number)) gridPos.set(p.driver_number, p.position);
     latestPos.set(p.driver_number, p.position);
   }
 
   // Get latest interval per driver
-  const latestInterval = new Map<number, { interval: number | string | null; gap: number | string | null }>();
+  const latestInterval = new Map<number, { interval: number | string | null; gap: number | string | null; isClosingToAhead: boolean }>();
+  const previousInterval = new Map<number, number | null>();
   const sortedIntervals = [...intervals].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   );
   for (const i of sortedIntervals) {
+    const prior = latestInterval.get(i.driver_number)?.interval;
+    previousInterval.set(
+      i.driver_number,
+      typeof prior === "number" ? prior : previousInterval.get(i.driver_number) ?? null
+    );
+    const previousNumeric =
+      typeof prior === "number" ? prior : previousInterval.get(i.driver_number) ?? null;
     latestInterval.set(i.driver_number, {
       interval: i.interval,
       gap: i.gap_to_leader,
+      isClosingToAhead:
+        typeof i.interval === "number" &&
+        previousNumeric != null &&
+        i.interval < previousNumeric,
     });
   }
 
@@ -219,6 +371,10 @@ export function buildTimingData(
   const latestSegments = new Map<number, (number | null)[][]>();
   const personalBestSectors = new Map<number, SectorBests>();
   const inPit = new Map<number, boolean>();
+  const pitElapsed = new Map<number, number | null>();
+  const pitLaneTime = new Map<number, number | null>();
+  const pitStopTime = new Map<number, number | null>();
+  const showRecentPitTime = new Map<number, boolean>();
   const hasTakenChequered = new Map<number, boolean>();
   // Mini-sector count per sector is a fixed property of the circuit.
   // OpenF1 segment arrays vary in length due to pit laps and partial
@@ -320,7 +476,10 @@ export function buildTimingData(
     const currentDisplayLap = sortedLaps[sortedLaps.length - 1] ?? null;
     if (!currentDisplayLap) continue;
 
-    const currentSegments = getLapSegments(currentDisplayLap);
+    const rawCurrentSegments = getLapSegments(currentDisplayLap);
+    const currentSegments = rawCurrentSegments.map((sector, index) =>
+      normalizeSegmentsForCircuit(sector, sectorCounts[index])
+    ) as (number | null)[][];
 
     if (activeChequeredAt != null) {
       const completedAfterChequered = sortedLaps.some((lap) => {
@@ -337,20 +496,167 @@ export function buildTimingData(
     if (carryOverLap) {
       prevLapSectors.set(dn, getLapSectors(carryOverLap));
     }
+    const effectiveSectorDurations = withFallbackSectorDurations(
+      getLapSectors(currentDisplayLap),
+      carryOverLap ? getLapSectors(carryOverLap) : undefined,
+      pb
+    );
 
+    const latestPitStop = [...(pitStops ?? [])]
+      .filter((pit) => pit.driver_number === dn)
+      .filter((pit) => replayTimestamp == null || new Date(pit.date).getTime() <= replayTimestamp)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    const pitStopForLap = [...(pitStops ?? [])]
+      .filter((pit) => pit.driver_number === dn)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    let pitFlag = false;
+    if (replayTimestamp != null) {
+      const pitInLap = currentDisplayLap.is_pit_out_lap
+        ? [...sortedLaps].reverse().find((lap) => !lap.is_pit_out_lap && getLapStartMs(lap) < getLapStartMs(currentDisplayLap)) ?? null
+        : currentDisplayLap;
+
+      if (pitInLap) {
+        const priorLapForPit = pitInLap === currentDisplayLap ? carryOverLap : previousCompletedLap;
+        const pitInLapDurations = withFallbackSectorDurations(
+          getLapSectors(pitInLap),
+          priorLapForPit ? getLapSectors(priorLapForPit) : undefined,
+          pb
+        );
+        const pitInLapSegments = getLapSegments(pitInLap).map((sector, index) =>
+          normalizeSegmentsForCircuit(sector, sectorCounts[index])
+        ) as (number | null)[][];
+        const pitEntrySeconds = getPitSegmentStartSeconds(
+          pitInLapDurations,
+          pitInLapSegments,
+          sectorCounts
+        );
+
+        if (pitEntrySeconds != null) {
+          let pitEntryMs = getLapStartMs(pitInLap) + pitEntrySeconds * 1000;
+          let pitExitMs: number | null = null;
+          const authoritativePitStop = pitStopForLap.find(
+            (pit) => pit.lap_number === pitInLap.lap_number
+          );
+          const authoritativeLaneDuration =
+            authoritativePitStop?.pit_duration ?? authoritativePitStop?.lane_duration ?? null;
+          const outLap = (allLaps ?? laps).find(
+            (lap) =>
+              lap.driver_number === dn &&
+              lap.is_pit_out_lap &&
+              getLapStartMs(lap) > getLapStartMs(pitInLap)
+          );
+
+          if (
+            authoritativePitStop
+          ) {
+            // OpenF1 pit rows line up with the end of the pit-lane window in
+            // the real feed. When lane duration is present, derive the
+            // corresponding pit-lane entry time from the same authoritative
+            // record so the timer starts at the pit-lane line.
+            if (authoritativeLaneDuration != null && authoritativeLaneDuration > 0) {
+              pitEntryMs = new Date(authoritativePitStop.date).getTime() - authoritativeLaneDuration * 1000;
+            }
+            pitExitMs = new Date(authoritativePitStop.date).getTime();
+          }
+
+          if (pitExitMs == null && outLap) {
+            const outLapPrior = pitInLap;
+            const outLapDurations = withFallbackSectorDurations(
+              getLapSectors(outLap),
+              outLapPrior ? getLapSectors(outLapPrior) : undefined,
+              pb
+            );
+            const outLapSegments = getLapSegments(outLap).map((sector, index) =>
+              normalizeSegmentsForCircuit(sector, sectorCounts[index])
+            ) as (number | null)[][];
+            const outLapPitExitSeconds = getPitSegmentEndSeconds(
+              outLapDurations,
+              outLapSegments,
+              sectorCounts
+            );
+
+            if (outLapPitExitSeconds != null) {
+              pitExitMs = getLapStartMs(outLap) + outLapPitExitSeconds * 1000;
+            } else if (hasVisibleNonPitSegmentsByReplay(
+              getLapStartMs(outLap),
+              outLapDurations,
+              outLapSegments,
+              replayTimestamp,
+              sectorCounts
+            )) {
+              pitExitMs = getLapStartMs(outLap);
+            } else if (replayTimestamp >= getLapStartMs(outLap)) {
+              pitExitMs = Number.POSITIVE_INFINITY;
+            } else {
+              pitExitMs = getLapStartMs(outLap);
+            }
+          } else if (pitExitMs == null && !isLapCompleteByReplay(pitInLap, replayTimestamp)) {
+            pitExitMs = Number.POSITIVE_INFINITY;
+          } else if (
+            pitExitMs == null &&
+            latestPitStop &&
+            latestPitStop.lap_number === pitInLap.lap_number &&
+            new Date(latestPitStop.date).getTime() <= replayTimestamp
+          ) {
+            // A completed in-lap with a pit-stop record but no out-lap yet means
+            // the driver is still in the box / lane state for replay purposes.
+            // Keep PIT active until an out-lap is actually observed.
+            pitExitMs = Number.POSITIVE_INFINITY;
+          } else if (pitExitMs == null && pitInLap.lap_duration != null) {
+            // Some feeds lag the pit-stop row and the out-lap row behind the lap
+            // completion at the timing line. Keep PIT latched briefly so the
+            // board does not fall back to Gap/Int while the car is visibly in
+            // the box.
+            pitExitMs = getLapStartMs(pitInLap) + (pitInLap.lap_duration + PIT_BOX_GRACE_SECONDS) * 1000;
+          }
+
+          if (pitExitMs != null && replayTimestamp >= pitEntryMs && replayTimestamp < pitExitMs) {
+            pitFlag = true;
+            pitElapsed.set(dn, Math.max(0, (replayTimestamp - pitEntryMs) / 1000));
+          } else if (
+            pitExitMs != null &&
+            replayTimestamp >= pitExitMs &&
+            replayTimestamp < pitExitMs + PIT_EXIT_DISPLAY_HOLD_MS
+          ) {
+            pitElapsed.set(dn, Math.max(0, (pitExitMs - pitEntryMs) / 1000));
+            showRecentPitTime.set(dn, true);
+          }
+        }
+      }
+    } else {
+      const pitEntrySeconds = getPitSegmentStartSeconds(
+        effectiveSectorDurations,
+        currentSegments,
+        sectorCounts
+      );
+      const hasActivePitSegment = pitEntrySeconds != null && isPitSegmentReached(
+        getLapStartMs(currentDisplayLap),
+        effectiveSectorDurations,
+        currentSegments,
+        replayTimestamp,
+        sectorCounts
+      );
+      if (currentDisplayLap.is_pit_out_lap) {
+        pitFlag = pitEntrySeconds != null || hasActivePitSegment;
+      } else {
+        pitFlag = hasActivePitSegment;
+      }
+    }
+    inPit.set(dn, pitFlag);
+    pitLaneTime.set(dn, latestPitStop?.pit_duration ?? latestPitStop?.lane_duration ?? null);
+    pitStopTime.set(dn, latestPitStop?.stop_duration ?? null);
     if (currentDisplayLap.is_pit_out_lap) {
-      inPit.set(dn, false);
       latestSectors.set(dn, [null, null, null]);
       latestSegments.set(dn, [[], [], []]);
       continue;
     }
 
-    inPit.set(dn, isPitSegmentReached(currentDisplayLap, currentSegments, replayTimestamp));
     latestSectors.set(dn, getLapSectors(currentDisplayLap));
     latestSegments.set(dn, currentSegments);
     latestLapMeta.set(dn, {
       dateStart: currentDisplayLap.date_start,
-      durations: getLapSectors(currentDisplayLap),
+      durations: effectiveSectorDurations,
     });
   }
 
@@ -362,14 +668,7 @@ export function buildTimingData(
     for (let i = 0; i < 3; i++) {
       const expected = sectorCounts[i];
       if (expected === 0) continue;
-      if (segs[i].length < expected) {
-        segs[i] = [
-          ...segs[i],
-          ...Array<null>(expected - segs[i].length).fill(null),
-        ];
-      } else if (segs[i].length > expected) {
-        segs[i] = segs[i].slice(0, expected);
-      }
+      segs[i] = normalizeSegmentsForCircuit(segs[i], expected);
     }
 
     // Time-based masking: during replay, reveal mini-sectors progressively
@@ -454,12 +753,19 @@ export function buildTimingData(
     const intv = latestInterval.get(driverNum);
     entries.push({
       position: pos,
+      gridPosition: gridPos.get(driverNum) ?? null,
+      positionDelta: gridPos.has(driverNum) ? (gridPos.get(driverNum)! - pos) : null,
       driverNumber: driverNum,
       acronym: driver.name_acronym,
       teamColour: driver.team_colour,
       teamName: driver.team_name,
       interval: intv?.interval ?? null,
       gapToLeader: intv?.gap ?? null,
+      isClosingToAhead: intv?.isClosingToAhead ?? false,
+      pitElapsed: pitElapsed.get(driverNum) ?? null,
+      pitLaneTime: pitLaneTime.get(driverNum) ?? null,
+      pitStopTime: pitStopTime.get(driverNum) ?? null,
+      showRecentPitTime: showRecentPitTime.get(driverNum) ?? false,
       lastLap: lastLap.get(driverNum) ?? null,
       bestLap: bestLap.get(driverNum) ?? null,
       compound: currentCompound.get(driverNum) ?? null,
@@ -482,14 +788,24 @@ export function buildTimingData(
   for (const driver of drivers) {
     if (!latestPos.has(driver.driver_number) && !appendedDrivers.has(driver.driver_number)) {
       appendedDrivers.add(driver.driver_number);
+      const appendedPosition = nextPos++;
       sorted.push({
-        position: nextPos++,
+        position: appendedPosition,
+        gridPosition: gridPos.get(driver.driver_number) ?? null,
+        positionDelta: gridPos.has(driver.driver_number)
+          ? (gridPos.get(driver.driver_number)! - appendedPosition)
+          : null,
         driverNumber: driver.driver_number,
         acronym: driver.name_acronym,
         teamColour: driver.team_colour,
         teamName: driver.team_name,
         interval: latestInterval.get(driver.driver_number)?.interval ?? null,
         gapToLeader: latestInterval.get(driver.driver_number)?.gap ?? null,
+        isClosingToAhead: latestInterval.get(driver.driver_number)?.isClosingToAhead ?? false,
+        pitElapsed: pitElapsed.get(driver.driver_number) ?? null,
+        pitLaneTime: pitLaneTime.get(driver.driver_number) ?? null,
+        pitStopTime: pitStopTime.get(driver.driver_number) ?? null,
+        showRecentPitTime: showRecentPitTime.get(driver.driver_number) ?? false,
         lastLap: lastLap.get(driver.driver_number) ?? null,
         bestLap: bestLap.get(driver.driver_number) ?? null,
         compound: currentCompound.get(driver.driver_number) ?? null,
@@ -579,6 +895,152 @@ function DriverStatusBadges({
   );
 }
 
+function formatTimingValue(value: number | string | null): string {
+  if (value == null) return "—";
+  if (typeof value === "number") return `+${value.toFixed(3)}`;
+  return `${value}`;
+}
+
+function formatSeconds(value: number | null): string {
+  if (value == null) return "—";
+  return `${value.toFixed(1)}s`;
+}
+
+function formatPitSummary(
+  pitLaneTime: number | null,
+  pitStopTime: number | null
+): string {
+  if (pitLaneTime != null && pitStopTime != null) {
+    return `LANE ${formatSeconds(pitLaneTime)} STOP ${formatSeconds(pitStopTime)}`;
+  }
+  if (pitLaneTime != null) {
+    return `LANE ${formatSeconds(pitLaneTime)}`;
+  }
+  if (pitStopTime != null) {
+    return `STOP ${formatSeconds(pitStopTime)}`;
+  }
+  return "LANE —";
+}
+
+function RaceGapCell({
+  position,
+  interval,
+  gapToLeader,
+  isClosingToAhead,
+  isInPit,
+  pitElapsed,
+  pitLaneTime,
+  pitStopTime,
+  showRecentPitTime,
+}: {
+  position: number;
+  interval: number | string | null;
+  gapToLeader: number | string | null;
+  isClosingToAhead: boolean;
+  isInPit: boolean;
+  pitElapsed: number | null;
+  pitLaneTime: number | null;
+  pitStopTime: number | null;
+  showRecentPitTime: boolean;
+}) {
+  if (isInPit || showRecentPitTime) {
+    const primaryPitValue =
+      showRecentPitTime && pitStopTime != null
+        ? pitStopTime
+        : pitElapsed;
+    return (
+      <div className="flex min-w-[5.5rem] flex-col items-center justify-center gap-1 leading-none">
+        <span className="font-mono text-[13px] font-semibold text-blue-400">
+          {formatSeconds(primaryPitValue)}
+        </span>
+        <span className="font-mono text-[10px] text-f1-text-muted">
+          {isInPit
+            ? formatPitSummary(pitLaneTime, pitStopTime)
+            : "PIT EXIT"}
+        </span>
+      </div>
+    );
+  }
+
+  if (position === 1) {
+    return (
+      <div className="flex min-w-[5.5rem] flex-col items-center justify-center leading-none">
+        <span className="font-mono text-[13px] font-semibold text-f1-text">LEADER</span>
+        <span className="mt-0.5 text-[9px] uppercase tracking-[0.12em] text-f1-text-muted">
+          Gap
+        </span>
+      </div>
+    );
+  }
+
+  const hasInterval = interval != null;
+  const hasGap = gapToLeader != null;
+
+  return (
+    <div className="flex min-w-[5.5rem] flex-col items-center justify-center gap-1 leading-none">
+      <span
+        className={cn(
+          "font-mono text-[13px] font-semibold",
+          isClosingToAhead ? "text-green-400" : "text-f1-text-secondary"
+        )}
+      >
+        {hasInterval ? formatTimingValue(interval) : "—"}
+      </span>
+      <span className="font-mono text-[10px] text-f1-text-muted">
+        {hasGap ? formatTimingValue(gapToLeader) : "—"}
+      </span>
+    </div>
+  );
+}
+
+function RaceLapTimesCell({
+  lastLap,
+  bestLap,
+  overallBest,
+}: {
+  lastLap: number | null;
+  bestLap: number | null;
+  overallBest: number;
+}) {
+  return (
+    <div className="flex min-w-[5.75rem] flex-col items-center justify-center gap-1 leading-none">
+      <span className="font-mono text-[13px] font-semibold text-f1-text">
+        {formatLapTime(lastLap)}
+      </span>
+      <span
+        className={cn(
+          "font-mono text-[10px]",
+          bestLap !== null && bestLap === overallBest ? "text-purple-400" : "text-f1-text-muted"
+        )}
+      >
+        {formatLapTime(bestLap)}
+      </span>
+    </div>
+  );
+}
+
+function PositionDeltaBadge({ delta }: { delta: number | null }) {
+  if (delta == null || delta === 0) {
+    return (
+      <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-f1-text-muted">
+        P
+      </span>
+    );
+  }
+
+  const isGain = delta > 0;
+  return (
+    <span
+      className={cn(
+        "text-[10px] font-semibold tabular-nums",
+        isGain ? "text-green-400" : "text-red-400"
+      )}
+    >
+      {isGain ? `+${delta}` : `${delta}`}
+    </span>
+  );
+}
+
 export function TimingBoard({
   entries,
   retiredDrivers,
@@ -613,6 +1075,9 @@ export function TimingBoard({
   }
 
   const usesQualifyingStyleLayout = !!(isQualifying || isPractice);
+  const raceCellPadding = usesQualifyingStyleLayout ? "px-2 py-2" : "px-2 py-2";
+  const driverCellPadding = usesQualifyingStyleLayout ? "px-2 py-2" : "px-2 py-2";
+  const posCellPadding = usesQualifyingStyleLayout ? "px-2 py-2" : "px-2 py-2";
 
   return (
     <div className="overflow-x-auto rounded-lg border border-f1-border bg-f1-bg">
@@ -622,11 +1087,11 @@ export function TimingBoard({
             <th className="sticky left-0 z-20 bg-f1-surface px-2 py-2.5 text-center w-10">Pos</th>
             <th className="sticky left-10 z-20 bg-f1-surface px-2 py-2.5 text-left whitespace-nowrap">Driver</th>
             {usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center whitespace-nowrap">Best</th>}
-            {!usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center whitespace-nowrap">Int</th>}
-            {!usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center whitespace-nowrap">Gap</th>}
+            {!usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center whitespace-nowrap">Gap / Int</th>}
             <th className="px-2 py-2.5 text-center whitespace-nowrap">Sectors</th>
-            <th className="px-2 py-2.5 text-center whitespace-nowrap">Last</th>
-            {!usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center whitespace-nowrap">Best</th>}
+            <th className="px-2 py-2.5 text-center whitespace-nowrap">
+              {usesQualifyingStyleLayout ? "Last" : "Last / Best"}
+            </th>
             <th className="px-2 py-2.5 text-center w-10">Tire</th>
             {!usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center w-10">Pit</th>}
           </tr>
@@ -653,17 +1118,25 @@ export function TimingBoard({
                   isKnockoutBoundary && "border-t-2 border-t-red-500/40"
                 )}
               >
-                <td className={cn("sticky left-0 z-10 group-hover:bg-f1-card transition-colors px-2 py-2 text-center font-bold", inKnockoutZone ? "bg-[#110813] text-red-400/80" : "bg-f1-bg")}>
-                  {isOut ? (
-                    <span className="text-red-400">{outLabel}</span>
-                  ) : (
-                    entry.position
-                  )}
+                <td className={cn("sticky left-0 z-10 group-hover:bg-f1-card transition-colors text-center font-bold", posCellPadding, inKnockoutZone ? "bg-[#110813] text-red-400/80" : "bg-f1-bg")}>
+                  <div className="flex flex-col items-center justify-center gap-0.5 leading-none">
+                    {isOut ? (
+                      <span className="text-red-400">{outLabel}</span>
+                    ) : (
+                      <span>{entry.position}</span>
+                    )}
+                    {!usesQualifyingStyleLayout && (
+                      <PositionDeltaBadge delta={entry.positionDelta} />
+                    )}
+                  </div>
                 </td>
-                <td className={cn("sticky left-10 z-10 group-hover:bg-f1-card transition-colors px-2 py-2 whitespace-nowrap", inKnockoutZone ? "bg-[#110813]" : "bg-f1-bg")}>
-                  <div className="flex items-center gap-2">
+                <td className={cn("sticky left-10 z-10 group-hover:bg-f1-card transition-colors whitespace-nowrap", driverCellPadding, inKnockoutZone ? "bg-[#110813]" : "bg-f1-bg")}>
+                  <div className={cn("flex items-center", usesQualifyingStyleLayout ? "gap-2" : "gap-2")}>
                     <div
-                      className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+                      className={cn(
+                        "relative shrink-0 rounded-full flex items-center justify-center",
+                        usesQualifyingStyleLayout ? "h-6 w-6" : "h-5.5 w-5.5"
+                      )}
                       style={{ backgroundColor: getTeamColor(entry.teamColour, entry.teamName) }}
                     >
                       {(() => {
@@ -674,14 +1147,17 @@ export function TimingBoard({
                             alt={entry.teamName}
                             width={16}
                             height={16}
-                            className="h-4 w-4 object-contain"
+                            className={cn(
+                              "object-contain",
+                              usesQualifyingStyleLayout ? "h-4 w-4" : "h-4 w-4"
+                            )}
                             style={getTeamLogoStyle(entry.teamName)}
                           />
                         ) : null;
                       })()}
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-bold">{entry.acronym}</span>
+                    <div className={cn("flex items-center", usesQualifyingStyleLayout ? "gap-1.5" : "gap-1.5")}>
+                      <span className={cn("font-bold", usesQualifyingStyleLayout ? "" : "text-[14px] tracking-[0.03em]")}>{entry.acronym}</span>
                       <DriverStatusBadges
                         isInPit={entry.isInPit}
                         hasTakenChequered={entry.hasTakenChequered}
@@ -690,31 +1166,25 @@ export function TimingBoard({
                   </div>
                 </td>
                 {!usesQualifyingStyleLayout && (
-                  <td className="px-2 py-2 text-center font-mono text-f1-text-secondary whitespace-nowrap">
-                    {entry.position === 1
-                      ? "—"
-                      : entry.interval !== null
-                        ? typeof entry.interval === "number"
-                          ? `+${entry.interval.toFixed(3)}`
-                          : `${entry.interval}`
-                        : "—"}
-                  </td>
-                )}
-                {!usesQualifyingStyleLayout && (
-                  <td className="px-2 py-2 text-center font-mono text-f1-text-secondary whitespace-nowrap">
-                    {entry.position === 1
-                      ? "LEADER"
-                      : entry.gapToLeader !== null
-                        ? typeof entry.gapToLeader === "number"
-                          ? `+${entry.gapToLeader.toFixed(3)}`
-                          : `${entry.gapToLeader}`
-                        : "—"}
+                  <td className={cn("text-center whitespace-nowrap", raceCellPadding)}>
+                    <RaceGapCell
+                      position={entry.position}
+                      interval={entry.interval}
+                      gapToLeader={entry.gapToLeader}
+                      isClosingToAhead={entry.isClosingToAhead}
+                      isInPit={entry.isInPit}
+                      pitElapsed={entry.pitElapsed}
+                      pitLaneTime={entry.pitLaneTime}
+                      pitStopTime={entry.pitStopTime}
+                      showRecentPitTime={entry.showRecentPitTime}
+                    />
                   </td>
                 )}
                 {usesQualifyingStyleLayout && (
                   <td
                     className={cn(
-                      "px-2 py-2 text-center font-mono whitespace-nowrap",
+                      "text-center font-mono whitespace-nowrap",
+                      raceCellPadding,
                       entry.bestLap !== null && entry.bestLap === overallBest && "text-purple-400 font-bold"
                     )}
                   >
@@ -725,28 +1195,29 @@ export function TimingBoard({
                         : `+${(entry.bestLap - overallBest).toFixed(3)}`}
                   </td>
                 )}
-                <td className="px-2 py-2 text-center">
+                <td className={cn("text-center", raceCellPadding)}>
                   <SectorBreakdown
                     sectorTimes={[s1, s2, s3]}
                     segments={entry.segments}
                       personalBest={pb}
                       overallBest={ob}
                     />
-                  </td>
-                <td className="px-2 py-2 text-center font-mono whitespace-nowrap">
-                  {formatLapTime(entry.lastLap)}
                 </td>
                 {!usesQualifyingStyleLayout && (
-                  <td
-                    className={cn(
-                      "px-2 py-2 text-center font-mono whitespace-nowrap",
-                      entry.bestLap !== null && entry.bestLap === overallBest && "text-purple-400 font-bold"
-                    )}
-                  >
-                    {formatLapTime(entry.bestLap)}
+                  <td className={cn("text-center whitespace-nowrap", raceCellPadding)}>
+                    <RaceLapTimesCell
+                      lastLap={entry.lastLap}
+                      bestLap={entry.bestLap}
+                      overallBest={overallBest}
+                    />
                   </td>
                 )}
-                <td className="px-2 py-2 text-center">
+                {usesQualifyingStyleLayout && (
+                  <td className={cn("text-center font-mono whitespace-nowrap", raceCellPadding)}>
+                    {formatLapTime(entry.lastLap)}
+                  </td>
+                )}
+                <td className={cn("text-center", raceCellPadding)}>
                   {entry.compound && (
                     <span className="inline-flex items-center justify-center">
                       <TyreIcon compound={entry.compound} size={26} />
@@ -754,7 +1225,7 @@ export function TimingBoard({
                   )}
                 </td>
                 {!usesQualifyingStyleLayout && (
-                  <td className="px-2 py-2 text-center text-f1-text-muted">
+                  <td className={cn("text-center text-f1-text-muted", raceCellPadding)}>
                     {entry.pitCount}
                   </td>
                 )}

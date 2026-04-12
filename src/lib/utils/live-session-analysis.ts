@@ -1,4 +1,4 @@
-import type { Interval, LapData, Position, RaceControlMessage, Stint, Driver } from "@/lib/openf1/types";
+import type { Interval, LapData, Position, RaceControlMessage, Stint, Driver, PitStop } from "@/lib/openf1/types";
 import { buildTimingData, type TimingEntry } from "@/components/live/timing-board";
 
 export function filterDeletedLapTimes(
@@ -45,12 +45,13 @@ export function buildReplayTimingEntries(
   intervals: Interval[],
   stints: Stint[],
   laps: LapData[],
+  pitStops: PitStop[] | null | undefined,
   replayTime: number | null,
   isQualifyingSession: boolean,
   raceControl: RaceControlMessage[] | null | undefined
 ): TimingEntry[] {
   if (replayTime === null) {
-    return buildTimingData(drivers, positions, intervals, stints, laps, replayTime, laps, raceControl ?? undefined);
+    return buildTimingData(drivers, positions, intervals, stints, laps, pitStops ?? undefined, replayTime, laps, raceControl ?? undefined);
   }
 
   const cutoff = new Date(replayTime).toISOString();
@@ -100,6 +101,7 @@ export function buildReplayTimingEntries(
     filteredIntervals,
     filteredStints,
     filteredLaps,
+    pitStops ?? undefined,
     replayTime,
     laps,
     raceControl ?? undefined

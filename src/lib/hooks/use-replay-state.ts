@@ -29,10 +29,11 @@ export function useReplayState(
   const [speed, setSpeedState] = useState<PlaybackSpeed>(1);
 
   const rafRef = useRef<number | null>(null);
-  const lastFrameRef = useRef<number>(0);
   const currentTimeRef = useRef(currentTime);
   const speedRef = useRef(speed);
   const isPlayingRef = useRef(isPlaying);
+  const playStartedAtRef = useRef<number | null>(null);
+  const playStartedReplayTimeRef = useRef<number>(minTime);
 
   // Keep refs in sync
   useEffect(() => {
@@ -46,6 +47,8 @@ export function useReplayState(
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset state when prop changes
     setCurrentTime(minTime);
     setIsPlaying(false);
+    playStartedAtRef.current = null;
+    playStartedReplayTimeRef.current = minTime;
   }, [minTime]);
 
   // Animation loop
@@ -58,21 +61,20 @@ export function useReplayState(
       return;
     }
 
-    lastFrameRef.current = performance.now();
+    playStartedAtRef.current = performance.now();
+    playStartedReplayTimeRef.current = currentTimeRef.current;
 
     function tick(now: number) {
-      const elapsed = now - lastFrameRef.current;
-      lastFrameRef.current = now;
-
-      // Cap delta to avoid jumps after tab switches (~33ms = 30fps cap)
-      const cappedElapsed = Math.min(elapsed, 100);
-      const advance = cappedElapsed * speedRef.current;
-
-      const newTime = currentTimeRef.current + advance;
+      const startedAt = playStartedAtRef.current ?? now;
+      const elapsed = now - startedAt;
+      const newTime =
+        playStartedReplayTimeRef.current + elapsed * speedRef.current;
 
       if (newTime >= maxTime) {
         setCurrentTime(maxTime);
         setIsPlaying(false);
+        playStartedAtRef.current = null;
+        playStartedReplayTimeRef.current = maxTime;
         return;
       }
 
@@ -94,6 +96,8 @@ export function useReplayState(
     if (currentTimeRef.current >= maxTime) {
       // If at end, restart from beginning
       setCurrentTime(minTime);
+      currentTimeRef.current = minTime;
+      playStartedReplayTimeRef.current = minTime;
     }
     setIsPlaying(true);
   }, [minTime, maxTime]);
@@ -112,7 +116,13 @@ export function useReplayState(
 
   const seekTo = useCallback(
     (time: number) => {
-      setCurrentTime(Math.max(minTime, Math.min(maxTime, time)));
+      const clamped = Math.max(minTime, Math.min(maxTime, time));
+      setCurrentTime(clamped);
+      currentTimeRef.current = clamped;
+      playStartedReplayTimeRef.current = clamped;
+      if (playStartedAtRef.current != null) {
+        playStartedAtRef.current = performance.now();
+      }
     },
     [minTime, maxTime]
   );
@@ -180,8 +190,19 @@ export function useReplayState(
   }, [seekTo, minTime]);
 
   const setSpeed = useCallback((s: PlaybackSpeed) => {
+    if (playStartedAtRef.current != null) {
+      const now = performance.now();
+      const elapsed = now - playStartedAtRef.current;
+      const anchoredTime =
+        playStartedReplayTimeRef.current + elapsed * speedRef.current;
+      const clamped = Math.max(minTime, Math.min(maxTime, anchoredTime));
+      setCurrentTime(clamped);
+      currentTimeRef.current = clamped;
+      playStartedReplayTimeRef.current = clamped;
+      playStartedAtRef.current = now;
+    }
     setSpeedState(s);
-  }, []);
+  }, [minTime, maxTime]);
 
   return {
     currentTime,
