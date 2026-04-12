@@ -1,5 +1,97 @@
 import type { Interval, LapData, Position, RaceControlMessage, Stint, Driver, PitStop } from "@/lib/openf1/types";
-import { buildTimingData, type TimingEntry } from "@/components/live/timing-board";
+import {
+  buildTimingData,
+  buildTimingDataPreparedInput,
+  type TimingDataPreparedInput,
+  type TimingEntry,
+} from "@/components/live/timing-board";
+
+export interface ReplaySessionIndex {
+  positionsSorted: Position[];
+  positionTimes: number[];
+  intervalsSorted: Interval[];
+  intervalTimes: number[];
+  lapsSorted: LapData[];
+  lapStartTimes: number[];
+  lapsByDriverSorted: Map<number, LapData[]>;
+  raceControlSorted: RaceControlMessage[];
+  raceControlTimes: number[];
+  timingPreparedBase: TimingDataPreparedInput;
+}
+
+function upperBound(values: number[], target: number): number {
+  let lo = 0;
+  let hi = values.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (values[mid] <= target) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+export function buildReplaySessionIndex(
+  drivers: Driver[],
+  positions: Position[],
+  intervals: Interval[],
+  laps: LapData[],
+  pitStops: PitStop[] | null | undefined,
+  raceControl: RaceControlMessage[] | null | undefined
+): ReplaySessionIndex {
+  const positionsSorted = [...positions].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+  const intervalsSorted = [...intervals].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+  const lapsSorted = [...laps].sort((a, b) => {
+    const aTime = a.date_start ? new Date(a.date_start).getTime() : Number.POSITIVE_INFINITY;
+    const bTime = b.date_start ? new Date(b.date_start).getTime() : Number.POSITIVE_INFINITY;
+    return aTime - bTime;
+  });
+  const lapsByDriverSorted = new Map<number, LapData[]>();
+  for (const lap of laps) {
+    const driverLaps = lapsByDriverSorted.get(lap.driver_number) ?? [];
+    driverLaps.push(lap);
+    lapsByDriverSorted.set(lap.driver_number, driverLaps);
+  }
+  for (const [driverNumber, driverLaps] of lapsByDriverSorted) {
+    lapsByDriverSorted.set(
+      driverNumber,
+      [...driverLaps].sort((a, b) => {
+        const lapDiff = a.lap_number - b.lap_number;
+        if (lapDiff !== 0) return lapDiff;
+        const aTime = a.date_start ? new Date(a.date_start).getTime() : Number.POSITIVE_INFINITY;
+        const bTime = b.date_start ? new Date(b.date_start).getTime() : Number.POSITIVE_INFINITY;
+        return aTime - bTime;
+      })
+    );
+  }
+  const raceControlSorted = [...(raceControl ?? [])].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+
+  return {
+    positionsSorted,
+    positionTimes: positionsSorted.map((position) => new Date(position.date).getTime()),
+    intervalsSorted,
+    intervalTimes: intervalsSorted.map((interval) => new Date(interval.date).getTime()),
+    lapsSorted,
+    lapStartTimes: lapsSorted.map((lap) => lap.date_start ? new Date(lap.date_start).getTime() : Number.POSITIVE_INFINITY),
+    lapsByDriverSorted,
+    raceControlSorted,
+    raceControlTimes: raceControlSorted.map((message) => new Date(message.date).getTime()),
+    timingPreparedBase: buildTimingDataPreparedInput(
+      drivers,
+      positionsSorted,
+      intervalsSorted,
+      laps,
+      pitStops ?? undefined,
+      laps,
+      raceControlSorted
+    ),
+  };
+}
 
 export function filterDeletedLapTimes(
   laps: LapData[] | null | undefined,
@@ -48,21 +140,39 @@ export function buildReplayTimingEntries(
   pitStops: PitStop[] | null | undefined,
   replayTime: number | null,
   isQualifyingSession: boolean,
-  raceControl: RaceControlMessage[] | null | undefined
+  raceControl: RaceControlMessage[] | null | undefined,
+  replayIndex?: ReplaySessionIndex | null
 ): TimingEntry[] {
   if (replayTime === null) {
-    return buildTimingData(drivers, positions, intervals, stints, laps, pitStops ?? undefined, replayTime, laps, raceControl ?? undefined);
+    return buildTimingData(
+      drivers,
+      positions,
+      intervals,
+      stints,
+      laps,
+      pitStops ?? undefined,
+      replayTime,
+      laps,
+      raceControl ?? undefined,
+      replayIndex?.timingPreparedBase
+    );
   }
 
   const cutoff = new Date(replayTime).toISOString();
-  const filteredPositions = positions.filter((p) => p.date <= cutoff);
-  const filteredIntervals = intervals.filter((i) => i.date <= cutoff);
-  let filteredLaps = laps.filter((l) => l.date_start <= cutoff);
+  const filteredPositions = replayIndex
+    ? replayIndex.positionsSorted.slice(0, upperBound(replayIndex.positionTimes, replayTime))
+    : positions.filter((p) => p.date <= cutoff);
+  const filteredIntervals = replayIndex
+    ? replayIndex.intervalsSorted.slice(0, upperBound(replayIndex.intervalTimes, replayTime))
+    : intervals.filter((i) => i.date <= cutoff);
+  let filteredLaps = replayIndex
+    ? replayIndex.lapsSorted.slice(0, upperBound(replayIndex.lapStartTimes, replayTime))
+    : laps.filter((l) => l.date_start <= cutoff);
 
   if (isQualifyingSession && raceControl) {
     let currentPhaseStart: string | null = null;
     let seenChequeredSinceLastStart = false;
-    const sortedRaceControl = [...raceControl].sort(
+    const sortedRaceControl = replayIndex?.raceControlSorted ?? [...raceControl].sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
 
@@ -95,6 +205,36 @@ export function buildReplayTimingEntries(
     return s.lap_start != null && s.lap_start <= maxLap;
   });
 
+  let prepared: TimingDataPreparedInput | undefined;
+  if (replayIndex) {
+    const visibleLapKeys = new Set(
+      filteredLaps.map(
+        (lap) => `${lap.driver_number}:${lap.lap_number}:${lap.date_start ?? "null"}`
+      )
+    );
+    const filteredLapsByDriver = new Map<number, LapData[]>();
+    for (const [driverNumber, driverLaps] of replayIndex.lapsByDriverSorted) {
+      const visible = driverLaps.filter((lap) => {
+        if (!lap.date_start) return false;
+        if (lap.date_start > cutoff) return false;
+        if (isQualifyingSession && filteredLaps.length > 0) {
+          return visibleLapKeys.has(
+            `${lap.driver_number}:${lap.lap_number}:${lap.date_start}`
+          );
+        }
+        return true;
+      });
+      if (visible.length > 0) filteredLapsByDriver.set(driverNumber, visible);
+    }
+
+    prepared = {
+      ...replayIndex.timingPreparedBase,
+      sortedPositions: filteredPositions,
+      sortedIntervals: filteredIntervals,
+      lapsByDriver: filteredLapsByDriver,
+    };
+  }
+
   const entries = buildTimingData(
     drivers,
     filteredPositions,
@@ -104,7 +244,8 @@ export function buildReplayTimingEntries(
     pitStops ?? undefined,
     replayTime,
     laps,
-    raceControl ?? undefined
+    raceControl ?? undefined,
+    prepared
   );
 
   if (!isQualifyingSession) return entries;

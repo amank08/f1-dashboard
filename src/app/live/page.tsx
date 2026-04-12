@@ -31,6 +31,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils/cn";
 import { countryFlagUrl } from "@/lib/utils/formatters";
 import {
+  buildReplaySessionIndex,
   buildReplayTimingEntries,
   filterDeletedLapTimes,
   filterReplayRaceControl,
@@ -228,6 +229,18 @@ export default function SessionAnalysisPage() {
 
   const isQuali = selectedSession?.session_type === "Qualifying";
 
+  const replaySessionIndex = useMemo(() => {
+    if (!drivers || !positions || !laps) return null;
+    return buildReplaySessionIndex(
+      drivers,
+      positions,
+      intervals ?? [],
+      laps,
+      pitStops,
+      raceControl
+    );
+  }, [drivers, positions, intervals, laps, pitStops, raceControl]);
+
   // Filtered timing data for replay mode sidebar
   const replayTimingEntries = useMemo(() => {
     if (!drivers || !positions || !laps) return [];
@@ -240,9 +253,10 @@ export default function SessionAnalysisPage() {
       pitStops,
       replayTime,
       isQuali,
-      raceControl
+      raceControl,
+      replaySessionIndex
     );
-  }, [replayTime, drivers, positions, intervals, stints, laps, pitStops, isQuali, raceControl]);
+  }, [replayTime, drivers, positions, intervals, stints, laps, pitStops, isQuali, raceControl, replaySessionIndex]);
 
   // Detect retired/eliminated drivers from timing entries.
   // Race: DNF if lap count <90% of leader and no recent laps (3 min).

@@ -26,6 +26,9 @@ import {
 
 /** Target sample spacing after downsample (ms). ~2 Hz. */
 const DOWNSAMPLE_MS = 450;
+/** Drop obviously broken "tracks" that are just one stuck point all session. */
+const BROKEN_TRACK_MIN_SAMPLES = 100;
+const BROKEN_TRACK_MAX_SPAN = 0.25;
 
 export interface CircuitGeometry {
   /** MultiViewer circuit x samples in F1 native coords. */
@@ -74,9 +77,10 @@ export function buildReplaySnapshot(
     y: -(px * sin + py * cos),
   });
 
-  // Rotate circuit outline (if any) and collect bounds. Prefer computing
-  // bounds from the MV outline: it's a clean closed lap, whereas telemetry
-  // often includes pit-lane excursions that stretch the bbox.
+  // Rotate circuit outline (if any) and collect bounds. Start from the MV
+  // outline because it gives a clean closed lap, but expand those bounds with
+  // telemetry too so pit-lane excursions remain visible on circuits where the
+  // pit lane sits outside the main outline (for example Shanghai).
   let rotatedCircuit: { x: number; y: number }[] | null = null;
   let boundsMinX = Infinity;
   let boundsMaxX = -Infinity;
@@ -92,14 +96,17 @@ export function buildReplaySnapshot(
       if (p.y > boundsMaxY) boundsMaxY = p.y;
     }
   } else {
-    // No MV data — bound from telemetry itself (rotated the same way).
-    for (const s of raw) {
-      const p = rotate(s.x, s.y);
-      if (p.x < boundsMinX) boundsMinX = p.x;
-      if (p.x > boundsMaxX) boundsMaxX = p.x;
-      if (p.y < boundsMinY) boundsMinY = p.y;
-      if (p.y > boundsMaxY) boundsMaxY = p.y;
-    }
+    // No MV data — fall back fully to telemetry bounds.
+  }
+
+  // Always union in telemetry bounds so off-track positions like pit-lane
+  // samples are not projected outside the final viewBox.
+  for (const s of raw) {
+    const p = rotate(s.x, s.y);
+    if (p.x < boundsMinX) boundsMinX = p.x;
+    if (p.x > boundsMaxX) boundsMaxX = p.x;
+    if (p.y < boundsMinY) boundsMinY = p.y;
+    if (p.y > boundsMaxY) boundsMaxY = p.y;
   }
 
   const rangeX = boundsMaxX - boundsMinX || 1;
@@ -137,6 +144,10 @@ export function buildReplaySnapshot(
     const x: number[] = [];
     const y: number[] = [];
     let lastKept = -Infinity;
+    let trackMinX = Infinity;
+    let trackMaxX = -Infinity;
+    let trackMinY = Infinity;
+    let trackMaxY = -Infinity;
     for (const s of samples) {
       const ts = new Date(s.date).getTime();
       if (ts - lastKept >= DOWNSAMPLE_MS) {
@@ -145,12 +156,25 @@ export function buildReplaySnapshot(
         t.push(ts);
         // Round to 2 decimals — 1 cm precision on a 100-unit viewBox is
         // well beyond sub-pixel.
-        x.push(Math.round(p.x * 100) / 100);
-        y.push(Math.round(p.y * 100) / 100);
+        const px = Math.round(p.x * 100) / 100;
+        const py = Math.round(p.y * 100) / 100;
+        x.push(px);
+        y.push(py);
+        if (px < trackMinX) trackMinX = px;
+        if (px > trackMaxX) trackMaxX = px;
+        if (py < trackMinY) trackMinY = py;
+        if (py > trackMaxY) trackMaxY = py;
         lastKept = ts;
       }
     }
     if (t.length === 0) continue;
+    if (
+      t.length >= BROKEN_TRACK_MIN_SAMPLES &&
+      trackMaxX - trackMinX <= BROKEN_TRACK_MAX_SPAN &&
+      trackMaxY - trackMinY <= BROKEN_TRACK_MAX_SPAN
+    ) {
+      continue;
+    }
     drivers[String(num)] = { t, x, y };
     if (t[0] < globalMin) globalMin = t[0];
     if (t[t.length - 1] > globalMax) globalMax = t[t.length - 1];

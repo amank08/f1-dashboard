@@ -305,6 +305,107 @@ export interface TimingEntry {
   hasTakenChequered: boolean;
 }
 
+export interface TimingDataPreparedInput {
+  driverLookup: Map<number, Driver>;
+  sortedPositions: Position[];
+  sortedIntervals: Interval[];
+  lapsByDriver: Map<number, LapData[]>;
+  pitStopsByDriver: Map<number, PitStop[]>;
+  sortedRaceControl: RaceControlMessage[];
+  sectorCounts: [number, number, number];
+}
+
+export function buildTimingDataPreparedInput(
+  drivers: Driver[],
+  positions: Position[],
+  intervals: Interval[],
+  laps: LapData[],
+  pitStops?: PitStop[],
+  allLaps?: LapData[],
+  raceControl?: RaceControlMessage[]
+): TimingDataPreparedInput {
+  const driverLookup = new Map<number, Driver>();
+  for (const driver of drivers) {
+    driverLookup.set(driver.driver_number, driver);
+  }
+
+  const sortedPositions = [...positions].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+  const sortedIntervals = [...intervals].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+  const sortedRaceControl = [...(raceControl ?? [])].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+
+  const lapsByDriver = new Map<number, LapData[]>();
+  for (const lap of laps) {
+    const driverLaps = lapsByDriver.get(lap.driver_number) ?? [];
+    driverLaps.push(lap);
+    lapsByDriver.set(lap.driver_number, driverLaps);
+  }
+  for (const [driverNumber, driverLaps] of lapsByDriver) {
+    lapsByDriver.set(
+      driverNumber,
+      [...driverLaps].sort((a, b) => {
+        const lapDiff = a.lap_number - b.lap_number;
+        if (lapDiff !== 0) return lapDiff;
+        return new Date(a.date_start).getTime() - new Date(b.date_start).getTime();
+      })
+    );
+  }
+
+  const pitStopsByDriver = new Map<number, PitStop[]>();
+  for (const pit of pitStops ?? []) {
+    const driverPitStops = pitStopsByDriver.get(pit.driver_number) ?? [];
+    driverPitStops.push(pit);
+    pitStopsByDriver.set(pit.driver_number, driverPitStops);
+  }
+  for (const [driverNumber, driverPitStops] of pitStopsByDriver) {
+    pitStopsByDriver.set(
+      driverNumber,
+      [...driverPitStops].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    );
+  }
+
+  const sectorCounts: [number, number, number] = [0, 0, 0];
+  const freq: [Map<number, number>, Map<number, number>, Map<number, number>] = [new Map(), new Map(), new Map()];
+  for (const lap of (allLaps ?? laps)) {
+    const rawS1Len = lap.segments_sector_1?.length ?? 0;
+    const s1HasLeadingNull = rawS1Len > 0 && lap.segments_sector_1?.[0] === null;
+    const lens = [
+      s1HasLeadingNull ? rawS1Len - 1 : rawS1Len,
+      lap.segments_sector_2?.length ?? 0,
+      lap.segments_sector_3?.length ?? 0,
+    ];
+    for (let si = 0; si < 3; si++) {
+      if (lens[si] > 0) freq[si].set(lens[si], (freq[si].get(lens[si]) ?? 0) + 1);
+    }
+  }
+  for (let si = 0; si < 3; si++) {
+    let best = 0;
+    let bestCount = 0;
+    for (const [len, count] of freq[si]) {
+      if (count > bestCount) {
+        best = len;
+        bestCount = count;
+      }
+    }
+    sectorCounts[si] = best;
+  }
+
+  return {
+    driverLookup,
+    sortedPositions,
+    sortedIntervals,
+    lapsByDriver,
+    pitStopsByDriver,
+    sortedRaceControl,
+    sectorCounts,
+  };
+}
+
 export function buildTimingData(
   drivers: Driver[],
   positions: Position[],
@@ -317,12 +418,13 @@ export function buildTimingData(
    *  layout that doesn't shift as the replay progresses. Only needed
    *  when `laps` is a time-filtered subset. */
   allLaps?: LapData[],
-  raceControl?: RaceControlMessage[]
+  raceControl?: RaceControlMessage[],
+  prepared?: TimingDataPreparedInput
 ): TimingEntry[] {
   // Get latest position per driver
   const latestPos = new Map<number, number>();
   const gridPos = new Map<number, number>();
-  const sortedPositions = [...positions].sort(
+  const sortedPositions = prepared?.sortedPositions ?? [...positions].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   );
   for (const p of sortedPositions) {
@@ -333,7 +435,7 @@ export function buildTimingData(
   // Get latest interval per driver
   const latestInterval = new Map<number, { interval: number | string | null; gap: number | string | null; isClosingToAhead: boolean }>();
   const previousInterval = new Map<number, number | null>();
-  const sortedIntervals = [...intervals].sort(
+  const sortedIntervals = prepared?.sortedIntervals ?? [...intervals].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   );
   for (const i of sortedIntervals) {
@@ -381,39 +483,21 @@ export function buildTimingData(
   // data, so we use the MODE (most common count) across all session
   // laps rather than the max. Computed from all laps (not the time-
   // filtered subset) so the grid layout is stable during replay.
-  const sectorCounts: [number, number, number] = [0, 0, 0];
-  {
-    const freq: [Map<number, number>, Map<number, number>, Map<number, number>] = [new Map(), new Map(), new Map()];
-    for (const l of (allLaps ?? laps)) {
-      // Strip S1 leading null (OpenF1 detection point) before counting
-      const rawS1Len = l.segments_sector_1?.length ?? 0;
-      const s1HasLeadingNull = rawS1Len > 0 && l.segments_sector_1?.[0] === null;
-      const lens = [
-        s1HasLeadingNull ? rawS1Len - 1 : rawS1Len,
-        l.segments_sector_2?.length ?? 0,
-        l.segments_sector_3?.length ?? 0,
-      ];
-      for (let si = 0; si < 3; si++) {
-        if (lens[si] > 0) freq[si].set(lens[si], (freq[si].get(lens[si]) ?? 0) + 1);
-      }
-    }
-    for (let si = 0; si < 3; si++) {
-      let best = 0;
-      let bestCount = 0;
-      for (const [len, count] of freq[si]) {
-        if (count > bestCount) { best = len; bestCount = count; }
-      }
-      sectorCounts[si] = best;
-    }
-  }
+  const sectorCounts = prepared?.sectorCounts ?? buildTimingDataPreparedInput(
+    drivers,
+    [],
+    [],
+    laps,
+    undefined,
+    allLaps
+  ).sectorCounts;
 
   let activeChequeredAt: number | null = null;
-  if (raceControl && raceControl.length > 0) {
+  const sortedRaceControl = prepared?.sortedRaceControl ?? (raceControl && raceControl.length > 0
+    ? [...raceControl].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    : []);
+  if (sortedRaceControl.length > 0) {
     const cutoff = replayTimestamp != null ? replayTimestamp : Infinity;
-    const sortedRaceControl = [...raceControl].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-
     for (const msg of sortedRaceControl) {
       const messageTime = new Date(msg.date).getTime();
       if (messageTime > cutoff) continue;
@@ -429,15 +513,17 @@ export function buildTimingData(
   // Track latest lap metadata for time-based masking
   const latestLapMeta = new Map<number, { dateStart: string; durations: [number | null, number | null, number | null] }>();
 
-  const lapsByDriver = new Map<number, LapData[]>();
-  for (const lap of laps) {
-    const driverLaps = lapsByDriver.get(lap.driver_number) ?? [];
-    driverLaps.push(lap);
-    lapsByDriver.set(lap.driver_number, driverLaps);
+  const lapsByDriver = prepared?.lapsByDriver ?? new Map<number, LapData[]>();
+  if (!prepared) {
+    for (const lap of laps) {
+      const driverLaps = lapsByDriver.get(lap.driver_number) ?? [];
+      driverLaps.push(lap);
+      lapsByDriver.set(lap.driver_number, driverLaps);
+    }
   }
 
   for (const [dn, driverLaps] of lapsByDriver) {
-    const sortedLaps = [...driverLaps].sort((a, b) => {
+    const sortedLaps = prepared ? driverLaps : [...driverLaps].sort((a, b) => {
       const lapDiff = a.lap_number - b.lap_number;
       if (lapDiff !== 0) return lapDiff;
       return new Date(a.date_start).getTime() - new Date(b.date_start).getTime();
@@ -502,13 +588,17 @@ export function buildTimingData(
       pb
     );
 
-    const latestPitStop = [...(pitStops ?? [])]
-      .filter((pit) => pit.driver_number === dn)
-      .filter((pit) => replayTimestamp == null || new Date(pit.date).getTime() <= replayTimestamp)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-    const pitStopForLap = [...(pitStops ?? [])]
+    const pitStopForLap = prepared?.pitStopsByDriver.get(dn) ?? [...(pitStops ?? [])]
       .filter((pit) => pit.driver_number === dn)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    let latestPitStop: PitStop | undefined;
+    for (let i = pitStopForLap.length - 1; i >= 0; i--) {
+      const pit = pitStopForLap[i];
+      if (replayTimestamp == null || new Date(pit.date).getTime() <= replayTimestamp) {
+        latestPitStop = pit;
+        break;
+      }
+    }
 
     let pitFlag = false;
     if (replayTimestamp != null) {
@@ -539,7 +629,7 @@ export function buildTimingData(
             (pit) => pit.lap_number === pitInLap.lap_number
           );
           const authoritativeLaneDuration =
-            authoritativePitStop?.pit_duration ?? authoritativePitStop?.lane_duration ?? null;
+            authoritativePitStop?.lane_duration ?? authoritativePitStop?.pit_duration ?? null;
           const outLap = (allLaps ?? laps).find(
             (lap) =>
               lap.driver_number === dn &&
@@ -644,7 +734,7 @@ export function buildTimingData(
       }
     }
     inPit.set(dn, pitFlag);
-    pitLaneTime.set(dn, latestPitStop?.pit_duration ?? latestPitStop?.lane_duration ?? null);
+    pitLaneTime.set(dn, latestPitStop?.lane_duration ?? latestPitStop?.pit_duration ?? null);
     pitStopTime.set(dn, latestPitStop?.stop_duration ?? null);
     if (currentDisplayLap.is_pit_out_lap) {
       latestSectors.set(dn, [null, null, null]);
@@ -743,8 +833,10 @@ export function buildTimingData(
     }
   }
 
-  const driverLookup = new Map<number, Driver>();
-  for (const d of drivers) driverLookup.set(d.driver_number, d);
+  const driverLookup = prepared?.driverLookup ?? new Map<number, Driver>();
+  if (!prepared) {
+    for (const d of drivers) driverLookup.set(d.driver_number, d);
+  }
 
   const entries: TimingEntry[] = [];
   for (const [driverNum, pos] of latestPos) {
@@ -910,16 +1002,7 @@ function formatPitSummary(
   pitLaneTime: number | null,
   pitStopTime: number | null
 ): string {
-  if (pitLaneTime != null && pitStopTime != null) {
-    return `LANE ${formatSeconds(pitLaneTime)} STOP ${formatSeconds(pitStopTime)}`;
-  }
-  if (pitLaneTime != null) {
-    return `LANE ${formatSeconds(pitLaneTime)}`;
-  }
-  if (pitStopTime != null) {
-    return `STOP ${formatSeconds(pitStopTime)}`;
-  }
-  return "LANE —";
+  return `LANE ${formatSeconds(pitLaneTime)} STOP ${formatSeconds(pitStopTime)}`;
 }
 
 function RaceGapCell({
