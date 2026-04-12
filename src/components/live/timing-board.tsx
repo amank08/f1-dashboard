@@ -902,12 +902,6 @@ export function buildTimingData(
     inPit.set(dn, pitFlag);
     pitLaneTime.set(dn, visiblePitStopForDisplay?.lane_duration ?? visiblePitStopForDisplay?.pit_duration ?? null);
     pitStopTime.set(dn, visiblePitStopForDisplay?.stop_duration ?? null);
-    if (currentDisplayLap.is_pit_out_lap) {
-      latestSectors.set(dn, [null, null, null]);
-      latestSegments.set(dn, [[], [], []]);
-      continue;
-    }
-
     latestSectors.set(dn, getLapSectors(currentDisplayLap));
     latestSegments.set(dn, currentSegments);
     latestLapMeta.set(dn, {

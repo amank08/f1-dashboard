@@ -289,7 +289,7 @@ describe("buildReplayTimingEntries", () => {
     expect(entries[0].bestLap).toBeNull();
   });
 
-  it("keeps the previous completed lap as Last while a current outlap has blank sectors", () => {
+  it("keeps the previous completed lap as Last while a current outlap carries the previous visible sector state", () => {
     const drivers = [driver(12, "ANT")];
     const positions = [position("2026-04-05T07:48:05.000Z", 12, 1)];
     const laps = [
@@ -319,7 +319,49 @@ describe("buildReplayTimingEntries", () => {
 
     expect(entries).toHaveLength(1);
     expect(entries[0].lastLap).toBe(88.778);
-    expect(entries[0].sectorTimes).toEqual([null, null, null]);
+    expect(entries[0].sectorTimes).toEqual([30, null, null]);
+  });
+
+  it("shows race out-lap sector and mini-sector progress while preserving the previous completed last lap", () => {
+    const drivers = [driver(4, "NOR")];
+    const positions = [position("2026-04-05T07:48:05.000Z", 4, 1)];
+    const laps = [
+      {
+        ...lap(4, 8, "2026-04-05T07:33:00.000Z", 88.778),
+        duration_sector_1: 29.1,
+        duration_sector_2: 29.6,
+        duration_sector_3: 30.078,
+        segments_sector_1: [2049, 2049, 2049],
+        segments_sector_2: [2049, 2049, 2049],
+        segments_sector_3: [2049, 2049, 2049],
+      },
+      {
+        ...lap(4, 9, "2026-04-05T07:47:30.000Z", null),
+        is_pit_out_lap: true,
+        duration_sector_1: 31,
+        duration_sector_2: null,
+        duration_sector_3: null,
+        segments_sector_1: [2064, 2049, 2049],
+        segments_sector_2: [],
+        segments_sector_3: [],
+      },
+    ];
+
+    const entries = buildTimingData(
+      drivers,
+      positions,
+      [],
+      [],
+      laps,
+      undefined,
+      Date.parse("2026-04-05T07:47:55.000Z"),
+      laps
+    );
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].lastLap).toBe(88.778);
+    expect(entries[0].sectorTimes[0]).toBe(29.1);
+    expect(entries[0].segments[0]).toEqual([2064, 2049, null]);
   });
 
   it("does not expose last or best lap until the lap is completed at replay time", () => {
