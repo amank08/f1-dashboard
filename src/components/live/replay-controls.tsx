@@ -18,8 +18,8 @@ interface ReplayControlsProps {
   maxTime: number;
   isPlaying: boolean;
   speed: PlaybackSpeed;
-  statusLabel: string;
   useLapSkips: boolean;
+  embedded?: boolean;
   onToggle: () => void;
   onSeekTo: (time: number) => void;
   onSkipForward: (seconds: number) => void;
@@ -51,8 +51,8 @@ export const ReplayControls = memo(function ReplayControls({
   maxTime,
   isPlaying,
   speed,
-  statusLabel,
   useLapSkips,
+  embedded,
   onToggle,
   onSeekTo,
   onSkipForward,
@@ -77,7 +77,12 @@ export const ReplayControls = memo(function ReplayControls({
   const bigSkipAmount = 60;
 
   return (
-    <div className="space-y-3 rounded-lg border border-f1-border bg-f1-surface p-4">
+    <div className={cn(
+      "space-y-3 p-4",
+      embedded
+        ? "rounded-b-2xl border-x border-b border-f1-border/80 bg-f1-surface/95 shadow-lg backdrop-blur"
+        : "rounded-lg border border-f1-border bg-f1-surface"
+    )}>
       {/* Timeline scrubber */}
       <div className="flex items-center gap-3">
         <span className="w-16 text-right font-mono text-xs text-f1-text-secondary">
@@ -179,10 +184,6 @@ export const ReplayControls = memo(function ReplayControls({
           ))}
         </div>
 
-        {/* Status label */}
-        <div className="font-mono text-sm text-f1-text-secondary">
-          {statusLabel}
-        </div>
       </div>
     </div>
   );

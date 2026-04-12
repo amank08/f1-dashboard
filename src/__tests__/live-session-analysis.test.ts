@@ -720,7 +720,10 @@ describe("buildReplayTimingEntries", () => {
     expect(atOfficialLaneEntry[0].pitElapsed).toBe(0);
   });
 
-  it("does not mark a driver as in pit after a completed in-lap with no subsequent out-lap", () => {
+  it("keeps a driver marked as in pit after a completed in-lap with no subsequent out-lap", () => {
+    // A pit entry (2064) was detected but no out-lap or pit stop record ever
+    // arrived. Live, a client keeps PIT active indefinitely — the driver
+    // retired in the pit lane (e.g. Stroll JPN 2026 lap 30).
     const drivers = [driver(4, "NOR")];
     const positions = [position("2026-03-14T05:30:05.000Z", 4, 1)];
     const laps = [
@@ -747,7 +750,7 @@ describe("buildReplayTimingEntries", () => {
     );
 
     expect(entries).toHaveLength(1);
-    expect(entries[0].isInPit).toBe(false);
+    expect(entries[0].isInPit).toBe(true);
   });
 
   it("marks a driver as in pit between completing the in-lap and the out-lap starting", () => {

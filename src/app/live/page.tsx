@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { isPast, isFuture, parseISO } from "date-fns";
+import { AnimatePresence, motion } from "framer-motion";
 import { useMeetings } from "@/lib/hooks/use-meetings";
 import { useSessions, useSession } from "@/lib/hooks/use-sessions";
 import { usePositions } from "@/lib/hooks/use-positions";
@@ -37,13 +38,16 @@ import {
   filterReplayRaceControl,
 } from "@/lib/utils/live-session-analysis";
 import {
+  buildSessionPhases,
+  getLapAtTime,
+  getPhaseLabel,
   getQualifyingCutoffs,
   getQualifyingKnockoutPosition,
   getRetiredDrivers,
 } from "@/lib/utils/replay-processor";
 import { buildSessionSummary } from "@/lib/utils/session-summary";
 import { CustomSelect } from "@/components/ui/custom-select";
-import type { Session } from "@/lib/openf1/types";
+import type { RaceControlMessage, Session } from "@/lib/openf1/types";
 
 const RACE_SESSION_TYPES = new Set([
   "Race",
@@ -53,6 +57,60 @@ const RACE_SESSION_TYPES = new Set([
   "Sprint Shootout",
   "Practice",
 ]);
+
+function getReplayTrackStatusLabel(
+  raceControl: RaceControlMessage[] | null | undefined,
+  replayTime: number | null
+): string | null {
+  if (!raceControl || replayTime == null) return null;
+
+  const cutoff = new Date(replayTime).toISOString();
+  let maxMiniSector = 0;
+  for (const msg of raceControl) {
+    if (msg.scope === "Sector" && msg.sector != null && msg.sector > maxMiniSector) {
+      maxMiniSector = msg.sector;
+    }
+  }
+
+  const s1Boundary = Math.ceil(maxMiniSector / 3);
+  const s2Boundary = Math.ceil((maxMiniSector * 2) / 3);
+  const sectorStatus: [string | null, string | null, string | null] = [null, null, null];
+  let trackFlag: string | null = null;
+
+  for (const msg of raceControl) {
+    if (msg.date > cutoff) continue;
+    const msgUpper = (msg.message ?? "").toUpperCase();
+
+    if (msg.category === "SafetyCar") {
+      if (msgUpper.includes("VSC DEPLOYED")) trackFlag = "VSC";
+      else if (msgUpper.includes("VSC ENDING")) trackFlag = null;
+      else if (msgUpper.includes("SAFETY CAR DEPLOYED")) trackFlag = "SC";
+      else if (msgUpper.includes("SAFETY CAR IN THIS LAP")) trackFlag = "SC";
+      continue;
+    }
+
+    if (msg.scope === "Track") {
+      if (msg.flag === "RED") trackFlag = "RED";
+      else if (msg.flag === "GREEN" || msg.flag === "CLEAR") trackFlag = "GREEN";
+      continue;
+    }
+
+    if (msg.scope === "Sector" && msg.sector != null && maxMiniSector > 0) {
+      const timingSector =
+        msg.sector <= s1Boundary ? 0 : msg.sector <= s2Boundary ? 1 : 2;
+      if (msg.flag === "YELLOW" || msg.flag === "DOUBLE YELLOW") {
+        sectorStatus[timingSector] = "YELLOW";
+      } else if (msg.flag === "GREEN" || msg.flag === "CLEAR") {
+        sectorStatus[timingSector] = null;
+      }
+    }
+  }
+
+  if (trackFlag === "SC" || trackFlag === "VSC" || trackFlag === "RED") return trackFlag;
+  if (sectorStatus.some(Boolean)) return "YELLOW";
+  if (trackFlag) return trackFlag;
+  return "GREEN";
+}
 
 
 function findLatestCompletedSession(sessions: Session[]): Session | undefined {
@@ -284,6 +342,26 @@ export default function SessionAnalysisPage() {
   const replayRaceControl = useMemo(
     () => filterReplayRaceControl(raceControl, replayTime),
     [replayTime, raceControl]
+  );
+
+  const replayPhases = useMemo(
+    () => buildSessionPhases(raceControl ?? [], selectedSession?.session_type ?? "Race"),
+    [raceControl, selectedSession?.session_type]
+  );
+
+  const replayStatusLabel = useMemo(() => {
+    if (replayTime == null || !laps || !selectedSession?.session_type) return null;
+    const useLapStatus = selectedSession.session_type === "Race" || selectedSession.session_type === "Sprint";
+    if (useLapStatus) {
+      const { currentLap, totalLaps } = getLapAtTime(replayTime, laps);
+      return totalLaps > 0 ? `Lap ${currentLap} / ${totalLaps}` : null;
+    }
+    return getPhaseLabel(replayTime, replayPhases, laps) || null;
+  }, [replayTime, laps, replayPhases, selectedSession?.session_type]);
+
+  const replayTrackStatusLabel = useMemo(
+    () => getReplayTrackStatusLabel(raceControl, replayTime),
+    [raceControl, replayTime]
   );
 
   const dataLoading = sessionKey && (!positions || !drivers);
@@ -523,15 +601,71 @@ export default function SessionAnalysisPage() {
             </div>
             {/* Timing board — second on mobile, below map on desktop */}
             <div className="order-2 space-y-4 lg:col-start-1 lg:row-start-2">
-              {dataLoading ? (
-                <div className="space-y-2">
-                  {Array.from({ length: 20 }).map((_, i) => (
-                    <Skeleton key={i} className="h-10" />
-                  ))}
-                </div>
-              ) : (
-                <TimingBoard entries={replayTimingEntries} retiredDrivers={retiredDrivers} isQualifying={isQuali} isPractice={isPractice} knockoutPosition={qualiKnockoutPos} />
-              )}
+              <div className="overflow-hidden rounded-lg border border-f1-border bg-f1-bg">
+                {(replayStatusLabel || replayTrackStatusLabel) && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-f1-border bg-f1-surface px-3 py-3 sm:px-4">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-f1-text-muted">
+                        Replay
+                      </span>
+                      {replayStatusLabel && (
+                        <span className="font-mono text-sm font-semibold text-f1-text sm:text-[15px]">
+                          {replayStatusLabel}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex min-h-[2rem] items-center justify-end sm:min-w-[10rem]">
+                      <AnimatePresence mode="wait">
+                        {replayTrackStatusLabel && (
+                          <motion.span
+                            key={replayTrackStatusLabel}
+                            initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                            transition={{ duration: 0.2, ease: "easeOut" }}
+                            className={cn(
+                              "inline-flex min-w-[8.75rem] items-center justify-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] sm:min-w-[10rem]",
+                              replayTrackStatusLabel === "GREEN" && "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+                              replayTrackStatusLabel === "YELLOW" && "border-yellow-500/30 bg-yellow-500/10 text-yellow-200",
+                              replayTrackStatusLabel === "VSC" && "border-blue-500/30 bg-blue-500/10 text-blue-200",
+                              replayTrackStatusLabel === "SC" && "border-orange-500/30 bg-orange-500/10 text-orange-200",
+                              replayTrackStatusLabel === "RED" && "border-red-500/30 bg-red-500/10 text-red-200"
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "h-2 w-2 rounded-full",
+                                replayTrackStatusLabel === "GREEN" && "bg-emerald-300",
+                                replayTrackStatusLabel === "YELLOW" && "bg-yellow-200 animate-pulse",
+                                replayTrackStatusLabel === "VSC" && "bg-blue-200 animate-pulse",
+                                replayTrackStatusLabel === "SC" && "bg-orange-200 animate-pulse",
+                                replayTrackStatusLabel === "RED" && "bg-red-200 animate-pulse"
+                              )}
+                            />
+                            {replayTrackStatusLabel}
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                )}
+                {dataLoading ? (
+                  <div className="space-y-2 p-4">
+                    {Array.from({ length: 20 }).map((_, i) => (
+                      <Skeleton key={i} className="h-10" />
+                    ))}
+                  </div>
+                ) : (
+                  <TimingBoard
+                    entries={replayTimingEntries}
+                    retiredDrivers={retiredDrivers}
+                    isQualifying={isQuali}
+                    isPractice={isPractice}
+                    knockoutPosition={qualiKnockoutPos}
+                    embedded
+                  />
+                )}
+              </div>
             </div>
             {/* Race control — third on mobile, right column on desktop */}
             <div className="order-3 space-y-4 lg:col-start-2 lg:row-start-1 lg:row-span-2">

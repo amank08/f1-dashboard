@@ -758,15 +758,21 @@ export function buildTimingData(
     let pitFlag = false;
     if (replayTimestamp != null) {
       const allDriverLapTimes = prepared?.allLapStartTimesByDriver.get(dn) ?? allDriverLaps.map((lap) => new Date(lap.date_start).getTime());
-      const pitInLap = currentDisplayLap.is_pit_out_lap
+      // A retirement lap has no duration and no segments. Treat it like a
+      // pit-out lap so we walk back to the previous lap for pit detection,
+      // preserving any pit entry that was detected on that prior lap.
+      const isRetirementLap =
+        currentDisplayLap.lap_duration == null &&
+        (currentDisplayLap.segments_sector_1?.length ?? 0) === 0 &&
+        (currentDisplayLap.segments_sector_2?.length ?? 0) === 0 &&
+        (currentDisplayLap.segments_sector_3?.length ?? 0) === 0;
+      const pitInLap = (currentDisplayLap.is_pit_out_lap || isRetirementLap)
         ? (() => {
-            let candidateIndex = upperBound(allDriverLapTimes, getLapStartMs(currentDisplayLap) - 1) - 1;
-            while (candidateIndex >= 0) {
-              const candidate = allDriverLaps[candidateIndex];
-              if (!candidate.is_pit_out_lap) return candidate;
-              candidateIndex -= 1;
-            }
-            return null;
+            // The immediately preceding lap is always the in-lap for the
+            // current out-lap, even if it is also marked is_pit_out_lap (which
+            // happens when a driver pits on consecutive laps).
+            const candidateIndex = upperBound(allDriverLapTimes, getLapStartMs(currentDisplayLap) - 1) - 1;
+            return candidateIndex >= 0 ? allDriverLaps[candidateIndex] : null;
           })()
         : currentDisplayLap;
 
@@ -860,11 +866,10 @@ export function buildTimingData(
             // Keep PIT active until an out-lap is actually observed.
             pitExitMs = Number.POSITIVE_INFINITY;
           } else if (pitExitMs == null && pitInLap.lap_duration != null) {
-            // Some feeds lag the pit-stop row and the out-lap row behind the lap
-            // completion at the timing line. Keep PIT latched briefly so the
-            // board does not fall back to Gap/Int while the car is visibly in
-            // the box.
-            pitExitMs = getLapStartMs(pitInLap) + (pitInLap.lap_duration + PIT_BOX_GRACE_SECONDS) * 1000;
+            // allDriverLaps is the full unfiltered set, so outLap=null here
+            // means no out-lap exists at all (retirement or live feed hasn't
+            // emitted one yet). Keep PIT active until an exit signal appears.
+            pitExitMs = Number.POSITIVE_INFINITY;
           }
 
           if (pitExitMs != null && replayTimestamp >= pitEntryMs && replayTimestamp < pitExitMs) {
@@ -877,6 +882,37 @@ export function buildTimingData(
           ) {
             pitElapsed.set(dn, Math.max(0, (pitExitMs - pitEntryMs) / 1000));
             showRecentPitTime.set(dn, true);
+          }
+        } else if (!pitFlag && !showRecentPitTime.has(dn)) {
+          // Fallback for drivers whose in-lap has no SEGMENT_PIT data (e.g.
+          // Albon at JPN 2026). latestPitStop is already capped to <=
+          // replayTimestamp so using it here is live-appropriate.
+          if (latestPitStop) {
+            const pitExitMs = new Date(latestPitStop.date).getTime();
+            // Confirm this pit stop belongs to the current in-lap via timestamp:
+            // OpenF1's lap_number field is unreliable (can reference the out-lap),
+            // so we check that the pit record arrived after the in-lap started.
+            if (pitExitMs > getLapStartMs(pitInLap) && replayTimestamp >= pitExitMs) {
+              // Display the result until the out-lap completes, or 90 s after the
+              // pit exit record if no out-lap is visible yet.
+              const fbOutLapIndex = upperBound(allDriverLapTimes, getLapStartMs(pitInLap));
+              const fbOutLap = allDriverLaps.slice(fbOutLapIndex).find((lap) => lap.is_pit_out_lap);
+              let holdUntil: number;
+              if (fbOutLap) {
+                holdUntil = fbOutLap.lap_duration != null
+                  ? getLapStartMs(fbOutLap) + fbOutLap.lap_duration * 1000
+                  : Number.POSITIVE_INFINITY; // out-lap still in progress
+              } else {
+                holdUntil = pitExitMs + 90_000; // no out-lap data yet
+              }
+              if (replayTimestamp < holdUntil) {
+                visiblePitStopForDisplay = latestPitStop;
+                const laneDuration =
+                  latestPitStop.lane_duration ?? latestPitStop.pit_duration ?? null;
+                pitElapsed.set(dn, laneDuration);
+                showRecentPitTime.set(dn, true);
+              }
+            }
           }
         }
       }
@@ -1096,12 +1132,26 @@ function SectorBreakdown({
   segments,
   personalBest,
   overallBest,
+  isOut,
 }: {
   sectorTimes: [number | null, number | null, number | null];
   segments: (number | null)[][];
   personalBest: SectorBests;
   overallBest: SectorBests;
+  isOut: boolean;
 }) {
+  if (isOut) {
+    return (
+      <div className="flex items-start justify-center gap-1.5">
+        {[0, 1, 2].map((index) => (
+          <div key={index} className="flex min-w-0 flex-col items-center gap-1">
+            <span className="font-mono text-[10px] leading-none text-f1-text-muted">—</span>
+            <MiniSectorDotsGroup segments={[]} />
+          </div>
+        ))}
+      </div>
+    );
+  }
   return (
     <div className="flex items-start justify-center gap-1.5">
       {sectorTimes.map((value, index) => {
@@ -1127,19 +1177,22 @@ function DriverStatusBadges({
   isInPit: boolean;
   hasTakenChequered: boolean;
 }) {
-  if (!isInPit && !hasTakenChequered) return null;
+  const showPit = isInPit;
+  const showChequered = !isInPit && hasTakenChequered;
 
   return (
-    <div className="flex items-center gap-1">
-      {hasTakenChequered && (
+    <div className="flex h-4 w-8 items-center justify-center">
+      {showChequered && (
         <span
           title="Took chequered flag"
           aria-label="Took chequered flag"
-          className="h-3.5 w-3.5 shrink-0 rounded-[3px] border border-white/15 bg-[linear-gradient(45deg,#ffffff_25%,#111827_25%,#111827_50%,#ffffff_50%,#ffffff_75%,#111827_75%,#111827_100%)] bg-[length:6px_6px]"
-        />
+          className="shrink-0 text-[11px] leading-none"
+        >
+          🏁
+        </span>
       )}
-      {isInPit && (
-        <span className="rounded bg-f1-text-muted/15 px-1 py-0.5 text-[9px] font-semibold leading-none tracking-[0.12em] text-f1-text-muted">
+      {showPit && (
+        <span className="inline-flex min-w-[2rem] items-center justify-center rounded bg-f1-text-muted/15 px-1 py-0.5 text-[9px] font-semibold leading-none tracking-[0.12em] text-f1-text-muted">
           PIT
         </span>
       )}
@@ -1168,6 +1221,7 @@ function RaceGapCell({
   pitLaneTime,
   pitStopTime,
   showRecentPitTime,
+  isOut,
 }: {
   position: number;
   interval: number | string | null;
@@ -1178,7 +1232,16 @@ function RaceGapCell({
   pitLaneTime: number | null;
   pitStopTime: number | null;
   showRecentPitTime: boolean;
+  isOut: boolean;
 }) {
+  if (isOut) {
+    return (
+      <div className="flex min-w-[5.5rem] flex-col items-center justify-center leading-none">
+        <span className="font-mono text-[13px] text-f1-text-muted">—</span>
+      </div>
+    );
+  }
+
   if (isInPit || showRecentPitTime) {
     const primaryPitValue = showRecentPitTime
       ? (pitLaneTime ?? pitElapsed)
@@ -1220,12 +1283,12 @@ function RaceGapCell({
       <span
         className={cn(
           "font-mono text-[13px] font-semibold",
-          isClosingToAhead ? "text-green-400" : "text-f1-text-secondary"
+          isClosingToAhead ? "text-green-400" : "text-f1-text"
         )}
       >
         {hasInterval ? formatTimingValue(interval) : "—"}
       </span>
-      <span className="font-mono text-[10px] text-f1-text-muted">
+      <span className="font-mono text-[10px] text-f1-text-secondary">
         {hasGap ? formatTimingValue(gapToLeader) : "—"}
       </span>
     </div>
@@ -1261,8 +1324,8 @@ function RaceLapTimesCell({
 function PositionDeltaBadge({ delta }: { delta: number | null }) {
   if (delta == null || delta === 0) {
     return (
-      <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-f1-text-muted">
-        P
+      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-f1-text-muted">
+        —
       </span>
     );
   }
@@ -1271,7 +1334,7 @@ function PositionDeltaBadge({ delta }: { delta: number | null }) {
   return (
     <span
       className={cn(
-        "text-[10px] font-semibold tabular-nums",
+        "text-sm font-semibold tabular-nums",
         isGain ? "text-green-400" : "text-red-400"
       )}
     >
@@ -1286,16 +1349,21 @@ export function TimingBoard({
   isQualifying,
   isPractice,
   knockoutPosition,
+  embedded,
 }: {
   entries: TimingEntry[];
   retiredDrivers?: Map<number, string>;
   isQualifying?: boolean;
   isPractice?: boolean;
   knockoutPosition?: number;
+  embedded?: boolean;
 }) {
   if (entries.length === 0) {
     return (
-      <div className="rounded-lg border border-f1-border bg-f1-surface p-8 text-center text-f1-text-muted">
+      <div className={cn(
+        "p-8 text-center text-f1-text-muted",
+        embedded ? "bg-f1-surface" : "rounded-lg border border-f1-border bg-f1-surface"
+      )}>
         No timing data available
       </div>
     );
@@ -1319,7 +1387,10 @@ export function TimingBoard({
   const posCellPadding = usesQualifyingStyleLayout ? "px-2 py-2" : "px-2 py-2";
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-f1-border bg-f1-bg">
+    <div className={cn(
+      "overflow-x-auto bg-f1-bg",
+      embedded ? "" : "rounded-lg border border-f1-border"
+    )}>
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-f1-border bg-f1-surface text-xs font-semibold uppercase text-f1-text-muted">
@@ -1333,6 +1404,7 @@ export function TimingBoard({
             </th>
             <th className="px-2 py-2.5 text-center w-10">Tire</th>
             {!usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center w-10">Pit</th>}
+            {!usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center w-8">+/-</th>}
           </tr>
         </thead>
         <tbody>
@@ -1358,16 +1430,11 @@ export function TimingBoard({
                 )}
               >
                 <td className={cn("sticky left-0 z-10 group-hover:bg-f1-card transition-colors text-center font-bold", posCellPadding, inKnockoutZone ? "bg-[#110813] text-red-400/80" : "bg-f1-bg")}>
-                  <div className="flex flex-col items-center justify-center gap-0.5 leading-none">
-                    {isOut ? (
-                      <span className="text-red-400">{outLabel}</span>
-                    ) : (
-                      <span>{entry.position}</span>
-                    )}
-                    {!usesQualifyingStyleLayout && (
-                      <PositionDeltaBadge delta={entry.positionDelta} />
-                    )}
-                  </div>
+                  {isOut ? (
+                    <span className="text-red-400">{outLabel}</span>
+                  ) : (
+                    <span>{entry.position}</span>
+                  )}
                 </td>
                 <td className={cn("sticky left-10 z-10 group-hover:bg-f1-card transition-colors whitespace-nowrap", driverCellPadding, inKnockoutZone ? "bg-[#110813]" : "bg-f1-bg")}>
                   <div className={cn("flex items-center", usesQualifyingStyleLayout ? "gap-2" : "gap-2")}>
@@ -1416,6 +1483,7 @@ export function TimingBoard({
                       pitLaneTime={entry.pitLaneTime}
                       pitStopTime={entry.pitStopTime}
                       showRecentPitTime={entry.showRecentPitTime}
+                      isOut={isOut}
                     />
                   </td>
                 )}
@@ -1438,8 +1506,9 @@ export function TimingBoard({
                   <SectorBreakdown
                     sectorTimes={[s1, s2, s3]}
                     segments={entry.segments}
-                      personalBest={pb}
-                      overallBest={ob}
+                    personalBest={pb}
+                    overallBest={ob}
+                    isOut={isOut}
                     />
                 </td>
                 {!usesQualifyingStyleLayout && (
@@ -1466,6 +1535,11 @@ export function TimingBoard({
                 {!usesQualifyingStyleLayout && (
                   <td className={cn("text-center text-f1-text-muted", raceCellPadding)}>
                     {entry.pitCount}
+                  </td>
+                )}
+                {!usesQualifyingStyleLayout && (
+                  <td className={cn("text-center", raceCellPadding)}>
+                    <PositionDeltaBadge delta={entry.positionDelta} />
                   </td>
                 )}
               </motion.tr>

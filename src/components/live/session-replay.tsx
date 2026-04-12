@@ -1,13 +1,11 @@
 "use client";
 
-import { useMemo, useEffect, useRef } from "react";
+import { useMemo, useEffect, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { useLocationData } from "@/lib/hooks/use-location-data";
 import { useReplayState } from "@/lib/hooks/use-replay-state";
 import {
   getFrameAtTime,
-  getLapAtTime,
-  buildSessionPhases,
-  getPhaseLabel,
 } from "@/lib/utils/replay-processor";
 import { ReplayMap } from "@/components/live/replay-map";
 import { ReplayControls } from "@/components/live/replay-controls";
@@ -41,6 +39,7 @@ export function SessionReplay({
   retiredDrivers,
 }: SessionReplayProps) {
   const useLapSkips = LAP_SESSION_TYPES.has(sessionType);
+  const [controlsOpen, setControlsOpen] = useState(false);
 
   const { data: snapshot, isLoading, error } = useLocationData(sessionKey);
 
@@ -54,12 +53,6 @@ export function SessionReplay({
     if (!snapshot) return new Map<number, { x: number; y: number }>();
     return getFrameAtTime(snapshot, replay.currentTime);
   }, [snapshot, replay.currentTime]);
-
-  // Lap-based status for Race/Sprint
-  const { currentLap, totalLaps } = useMemo(
-    () => getLapAtTime(replay.currentTime, laps),
-    [replay.currentTime, laps]
-  );
 
   // Derive leader / lapped / retired status from timing board entries
   const driverLapStatus = useMemo(() => {
@@ -116,7 +109,7 @@ export function SessionReplay({
         } else if (msgUpper.includes("SAFETY CAR DEPLOYED")) {
           trackFlag = "sc";
         } else if (msgUpper.includes("SAFETY CAR IN THIS LAP")) {
-          trackFlag = null; // SC ending
+          trackFlag = "sc";
         }
         continue;
       }
@@ -125,8 +118,11 @@ export function SessionReplay({
       if (msg.scope === "Track") {
         if (msg.flag === "RED") {
           trackFlag = "red";
-        } else if (msg.flag === "GREEN") {
+        } else if (msg.flag === "GREEN" || msg.flag === "CLEAR") {
           trackFlag = null;
+          status[0] = null;
+          status[1] = null;
+          status[2] = null;
         }
         continue;
       }
@@ -150,19 +146,6 @@ export function SessionReplay({
 
     return status;
   }, [raceControl, replay.currentTime]);
-
-  // Phase-based status for Practice/Qualifying
-  const phases = useMemo(
-    () => buildSessionPhases(raceControl, sessionType),
-    [raceControl, sessionType]
-  );
-
-  const statusLabel = useMemo(() => {
-    if (useLapSkips) {
-      return totalLaps > 0 ? `Lap ${currentLap} / ${totalLaps}` : "";
-    }
-    return getPhaseLabel(replay.currentTime, phases, laps);
-  }, [useLapSkips, currentLap, totalLaps, replay.currentTime, phases, laps]);
 
   // Throttled time reporting to parent (~10 updates/sec for sidebar sync)
   // Uses trailing-edge fallback so the latest value is always delivered,
@@ -228,7 +211,46 @@ export function SessionReplay({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="relative">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center">
+        <div className="pointer-events-auto flex flex-col items-center">
+          <button
+            type="button"
+            onClick={() => setControlsOpen((open) => !open)}
+            aria-label={controlsOpen ? "Hide replay timeline" : "Show replay timeline"}
+            className="inline-flex h-8 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-f1-border bg-f1-surface/95 text-f1-text shadow-lg backdrop-blur transition-colors hover:bg-f1-card"
+          >
+            <ChevronDown
+              size={18}
+              className={controlsOpen ? "rotate-180 transition-transform" : "transition-transform"}
+            />
+          </button>
+          <div
+            className={
+              controlsOpen
+                ? "-mt-3 w-[min(92vw,52rem)] overflow-hidden transition-all duration-200 ease-out max-h-64 opacity-100"
+                : "-mt-3 w-[min(92vw,52rem)] overflow-hidden transition-all duration-200 ease-out max-h-0 opacity-0"
+            }
+          >
+            <ReplayControls
+              currentTime={replay.currentTime}
+              minTime={snapshot.minTime}
+              maxTime={snapshot.maxTime}
+              isPlaying={replay.isPlaying}
+              speed={replay.speed}
+              useLapSkips={useLapSkips}
+              embedded
+              onToggle={replay.toggle}
+              onSeekTo={replay.seekTo}
+              onSkipForward={replay.skipForward}
+              onSkipBackward={replay.skipBackward}
+              onNextLap={replay.nextLap}
+              onPrevLap={replay.prevLap}
+              onSetSpeed={replay.setSpeed}
+            />
+          </div>
+        </div>
+      </div>
       <ReplayMap
         trackPath={snapshot.trackPath}
         viewBox={snapshot.viewBox}
@@ -239,22 +261,6 @@ export function SessionReplay({
         sectorPaths={snapshot.sectorPaths}
         trackFlagStatus={trackFlagStatus}
         driverLapStatus={driverLapStatus}
-      />
-      <ReplayControls
-        currentTime={replay.currentTime}
-        minTime={snapshot.minTime}
-        maxTime={snapshot.maxTime}
-        isPlaying={replay.isPlaying}
-        speed={replay.speed}
-        statusLabel={statusLabel}
-        useLapSkips={useLapSkips}
-        onToggle={replay.toggle}
-        onSeekTo={replay.seekTo}
-        onSkipForward={replay.skipForward}
-        onSkipBackward={replay.skipBackward}
-        onNextLap={replay.nextLap}
-        onPrevLap={replay.prevLap}
-        onSetSpeed={replay.setSpeed}
       />
     </div>
   );
