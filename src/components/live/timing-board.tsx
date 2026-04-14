@@ -13,7 +13,6 @@ const SEGMENT_YELLOW = 2048;
 const SEGMENT_GREEN = 2049;
 const SEGMENT_PURPLE = 2051;
 const SEGMENT_PIT = 2064;
-const PIT_BOX_GRACE_SECONDS = 45;
 const PIT_EXIT_DISPLAY_HOLD_MS = 5500;
 
 function upperBound(values: number[], target: number): number {
@@ -1383,7 +1382,7 @@ export function TimingBoard({
 
   const usesQualifyingStyleLayout = !!(isQualifying || isPractice);
   const raceCellPadding = usesQualifyingStyleLayout ? "px-2 py-2" : "px-2 py-2";
-  const driverCellPadding = usesQualifyingStyleLayout ? "px-2 py-2" : "px-2 py-2";
+  const driverCellPadding = usesQualifyingStyleLayout ? "px-2 py-2" : "px-1.5 py-2";
   const posCellPadding = usesQualifyingStyleLayout ? "px-2 py-2" : "px-2 py-2";
 
   return (
@@ -1395,7 +1394,10 @@ export function TimingBoard({
         <thead>
           <tr className="border-b border-f1-border bg-f1-surface text-xs font-semibold uppercase text-f1-text-muted">
             <th className="sticky left-0 z-20 bg-f1-surface px-2 py-2.5 text-center w-10">Pos</th>
-            <th className="sticky left-10 z-20 bg-f1-surface px-2 py-2.5 text-left whitespace-nowrap">Driver</th>
+            <th className={cn(
+              "sticky left-10 z-20 bg-f1-surface py-2.5 text-left whitespace-nowrap",
+              usesQualifyingStyleLayout ? "px-2" : "w-[7.25rem] px-1.5"
+            )}>Driver</th>
             {usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center whitespace-nowrap">Best</th>}
             {!usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center whitespace-nowrap">Gap / Int</th>}
             <th className="px-2 py-2.5 text-center whitespace-nowrap">Sectors</th>
@@ -1436,8 +1438,13 @@ export function TimingBoard({
                     <span>{entry.position}</span>
                   )}
                 </td>
-                <td className={cn("sticky left-10 z-10 group-hover:bg-f1-card transition-colors whitespace-nowrap", driverCellPadding, inKnockoutZone ? "bg-[#110813]" : "bg-f1-bg")}>
-                  <div className={cn("flex items-center", usesQualifyingStyleLayout ? "gap-2" : "gap-2")}>
+                <td className={cn(
+                  "sticky left-10 z-10 group-hover:bg-f1-card transition-colors whitespace-nowrap",
+                  driverCellPadding,
+                  !usesQualifyingStyleLayout && "w-[7.25rem]",
+                  inKnockoutZone ? "bg-[#110813]" : "bg-f1-bg"
+                )}>
+                  <div className={cn("flex items-center", usesQualifyingStyleLayout ? "gap-2" : "gap-1.5")}>
                     <div
                       className={cn(
                         "relative shrink-0 rounded-full flex items-center justify-center",
@@ -1462,7 +1469,7 @@ export function TimingBoard({
                         ) : null;
                       })()}
                     </div>
-                    <div className={cn("flex items-center", usesQualifyingStyleLayout ? "gap-1.5" : "gap-1.5")}>
+                    <div className={cn("flex items-center", usesQualifyingStyleLayout ? "gap-1.5" : "gap-1")}>
                       <span className={cn("font-bold", usesQualifyingStyleLayout ? "" : "text-[14px] tracking-[0.03em]")}>{entry.acronym}</span>
                       <DriverStatusBadges
                         isInPit={entry.isInPit}

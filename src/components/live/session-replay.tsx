@@ -94,11 +94,16 @@ export function SessionReplay({
     const s2Boundary = Math.ceil((maxMiniSector * 2) / 3);
 
     let trackFlag: string | null = null;
+    let hasStarted = false;
 
     for (const msg of raceControl) {
       if (msg.date > cutoff) continue;
 
       const msgUpper = (msg.message ?? "").toUpperCase();
+
+      if (msg.category === "SessionStatus" && msgUpper.includes("STARTED")) {
+        hasStarted = true;
+      }
 
       // SafetyCar category is the most reliable signal
       if (msg.category === "SafetyCar") {
@@ -119,6 +124,7 @@ export function SessionReplay({
         if (msg.flag === "RED") {
           trackFlag = "red";
         } else if (msg.flag === "GREEN" || msg.flag === "CLEAR") {
+          hasStarted = true;
           trackFlag = null;
           status[0] = null;
           status[1] = null;
@@ -142,6 +148,10 @@ export function SessionReplay({
     // Track-wide flags override individual sectors
     if (trackFlag) {
       return [trackFlag, trackFlag, trackFlag] as [string | null, string | null, string | null];
+    }
+
+    if (!hasStarted) {
+      return [null, null, null];
     }
 
     return status;

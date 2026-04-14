@@ -17,7 +17,6 @@ import { PageHeader } from "@/components/layout/page-header";
 import { SeasonSelector } from "@/components/selectors/season-selector";
 import { ResultsTable, buildResults } from "@/components/tables/results-table";
 import { TimingBoard } from "@/components/live/timing-board";
-import { RaceControlFeed } from "@/components/live/race-control-feed";
 import { CircuitMap } from "@/components/live/circuit-map";
 import { SessionInfoPanel } from "@/components/live/session-info-panel";
 import { SessionReplay } from "@/components/live/session-replay";
@@ -76,10 +75,15 @@ function getReplayTrackStatusLabel(
   const s2Boundary = Math.ceil((maxMiniSector * 2) / 3);
   const sectorStatus: [string | null, string | null, string | null] = [null, null, null];
   let trackFlag: string | null = null;
+  let hasStarted = false;
 
   for (const msg of raceControl) {
     if (msg.date > cutoff) continue;
     const msgUpper = (msg.message ?? "").toUpperCase();
+
+    if (msg.category === "SessionStatus" && msgUpper.includes("STARTED")) {
+      hasStarted = true;
+    }
 
     if (msg.category === "SafetyCar") {
       if (msgUpper.includes("VSC DEPLOYED")) trackFlag = "VSC";
@@ -91,7 +95,10 @@ function getReplayTrackStatusLabel(
 
     if (msg.scope === "Track") {
       if (msg.flag === "RED") trackFlag = "RED";
-      else if (msg.flag === "GREEN" || msg.flag === "CLEAR") trackFlag = "GREEN";
+      else if (msg.flag === "GREEN" || msg.flag === "CLEAR") {
+        hasStarted = true;
+        trackFlag = "GREEN";
+      }
       continue;
     }
 
@@ -106,10 +113,30 @@ function getReplayTrackStatusLabel(
     }
   }
 
+  if (!hasStarted) return null;
   if (trackFlag === "SC" || trackFlag === "VSC" || trackFlag === "RED") return trackFlag;
   if (sectorStatus.some(Boolean)) return "YELLOW";
   if (trackFlag) return trackFlag;
   return "GREEN";
+}
+
+function getReplayRaceControlHeadline(message: RaceControlMessage | null): string | null {
+  if (!message) return null;
+
+  const text = message.message?.trim();
+  if (text) return text;
+
+  const fallback = [message.scope, message.flag].filter(Boolean).join(" ");
+  return fallback || null;
+}
+
+function formatRaceControlTimestamp(date: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(new Date(date));
 }
 
 
@@ -143,6 +170,7 @@ export default function SessionAnalysisPage() {
   const [autoSelected, setAutoSelected] = useState(false);
   const [viewMode, setViewMode] = useState<"results" | "replay">("results");
   const [replayTime, setReplayTime] = useState<number | null>(null);
+  const [isReplayRaceControlOpen, setIsReplayRaceControlOpen] = useState(false);
 
   const handleReplayTimeChange = useCallback((time: number) => {
     setReplayTime(time);
@@ -225,6 +253,7 @@ export default function SessionAnalysisPage() {
     setSessionKey(null);
     setAutoSelected(false);
     setReplayTime(null);
+    setIsReplayRaceControlOpen(false);
     setViewMode("results");
   }
 
@@ -233,12 +262,14 @@ export default function SessionAnalysisPage() {
     setMeetingKey(newMeetingKey);
     setSessionKey(null);
     setReplayTime(null);
+    setIsReplayRaceControlOpen(false);
   }
 
   // Reset replay time when session changes
   function handleSessionChange(newSessionKey: number) {
     setSessionKey(newSessionKey);
     setReplayTime(null);
+    setIsReplayRaceControlOpen(false);
   }
 
   // Determine if the selected session is currently live
@@ -362,6 +393,18 @@ export default function SessionAnalysisPage() {
   const replayTrackStatusLabel = useMemo(
     () => getReplayTrackStatusLabel(raceControl, replayTime),
     [raceControl, replayTime]
+  );
+  const latestReplayRaceControl = useMemo(
+    () => replayRaceControl.at(-1) ?? null,
+    [replayRaceControl]
+  );
+  const latestReplayRaceControlHeadline = useMemo(
+    () => getReplayRaceControlHeadline(latestReplayRaceControl),
+    [latestReplayRaceControl]
+  );
+  const replayRaceControlMessages = useMemo(
+    () => [...replayRaceControl].reverse(),
+    [replayRaceControl]
   );
 
   const dataLoading = sessionKey && (!positions || !drivers);
@@ -578,9 +621,9 @@ export default function SessionAnalysisPage() {
       {/* Replay mode */}
       {sessionKey && viewMode === "replay" && !dataUnavailable && (
         <div className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-[1fr_400px] lg:grid-rows-[auto_1fr]">
+          <div className="space-y-6">
             {/* Replay map — always first */}
-            <div className="order-1 space-y-4 lg:col-start-1 lg:row-start-1">
+            <div className="space-y-4">
               {drivers && laps ? (
                 <SessionReplay
                   sessionKey={sessionKey}
@@ -599,12 +642,13 @@ export default function SessionAnalysisPage() {
                 </div>
               )}
             </div>
-            {/* Timing board — second on mobile, below map on desktop */}
-            <div className="order-2 space-y-4 lg:col-start-1 lg:row-start-2">
+            {/* Timing board */}
+            <div className="space-y-4">
               <div className="overflow-hidden rounded-lg border border-f1-border bg-f1-bg">
-                {(replayStatusLabel || replayTrackStatusLabel) && (
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-f1-border bg-f1-surface px-3 py-3 sm:px-4">
-                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                {(replayStatusLabel || replayTrackStatusLabel || latestReplayRaceControlHeadline) && (
+                  <div className="border-b border-f1-border bg-f1-surface">
+                    <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-3 sm:px-4">
+                    <div className="flex min-w-0 items-center gap-3">
                       <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-f1-text-muted">
                         Replay
                       </span>
@@ -612,6 +656,40 @@ export default function SessionAnalysisPage() {
                         <span className="font-mono text-sm font-semibold text-f1-text sm:text-[15px]">
                           {replayStatusLabel}
                         </span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      {latestReplayRaceControlHeadline && latestReplayRaceControl && (
+                        <button
+                          type="button"
+                          onClick={() => setIsReplayRaceControlOpen((open) => !open)}
+                          className="flex min-h-[2rem] w-full items-center rounded-full border border-f1-border/80 bg-f1-bg/70 px-3 py-1.5 text-left text-xs text-f1-text shadow-sm transition-colors hover:border-f1-accent/40 hover:bg-f1-card/80"
+                        >
+                          <span className="mr-2 shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-f1-text-muted">
+                            RC
+                          </span>
+                          <span
+                            className="min-w-0 flex-1 overflow-hidden"
+                            style={{ perspective: 900 }}
+                          >
+                            <AnimatePresence mode="wait">
+                              <motion.span
+                                key={`${latestReplayRaceControl.date}-${latestReplayRaceControl.message}`}
+                                initial={{ rotateX: -88, opacity: 0.35, y: -6 }}
+                                animate={{ rotateX: 0, opacity: 1, y: 0 }}
+                                exit={{ rotateX: 88, opacity: 0.2, y: 6 }}
+                                transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
+                                style={{ transformOrigin: "50% 0%" }}
+                                className="block truncate font-medium"
+                              >
+                                {latestReplayRaceControlHeadline}
+                              </motion.span>
+                            </AnimatePresence>
+                          </span>
+                          <span className="ml-3 shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-f1-text-muted">
+                            {isReplayRaceControlOpen ? "Hide" : "All"}
+                          </span>
+                        </button>
                       )}
                     </div>
                     <div className="flex min-h-[2rem] items-center justify-end sm:min-w-[10rem]">
@@ -648,6 +726,44 @@ export default function SessionAnalysisPage() {
                       </AnimatePresence>
                     </div>
                   </div>
+                    <AnimatePresence initial={false}>
+                      {isReplayRaceControlOpen && replayRaceControlMessages.length > 0 && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.22, ease: "easeOut" }}
+                          className="overflow-hidden border-t border-f1-border/80"
+                        >
+                          <div className="max-h-72 space-y-2 overflow-y-auto px-3 py-3 sm:px-4">
+                            {replayRaceControlMessages.map((message) => {
+                              const headline = getReplayRaceControlHeadline(message);
+                              if (!headline) return null;
+
+                              return (
+                                <div
+                                  key={`${message.date}-${message.message}-${message.driver_number ?? "track"}`}
+                                  className="rounded-lg border border-f1-border/70 bg-f1-bg/70 px-3 py-2"
+                                >
+                                  <div className="mb-1 flex items-center justify-between gap-3">
+                                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-f1-text-muted">
+                                      {formatRaceControlTimestamp(message.date)}
+                                    </span>
+                                    <span className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-f1-text-muted">
+                                      {[message.category, message.flag ?? message.scope].filter(Boolean).join(" · ")}
+                                    </span>
+                                  </div>
+                                  <div className="text-sm text-f1-text">
+                                    {headline}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 )}
                 {dataLoading ? (
                   <div className="space-y-2 p-4">
@@ -666,17 +782,6 @@ export default function SessionAnalysisPage() {
                   />
                 )}
               </div>
-            </div>
-            {/* Race control — third on mobile, right column on desktop */}
-            <div className="order-3 space-y-4 lg:col-start-2 lg:row-start-1 lg:row-span-2">
-              <h3 className="text-sm font-semibold uppercase text-f1-text-muted">
-                Race Control
-              </h3>
-              {raceControl ? (
-                <RaceControlFeed messages={replayRaceControl} />
-              ) : (
-                <Skeleton className="h-64" />
-              )}
             </div>
           </div>
         </div>
