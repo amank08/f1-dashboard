@@ -28,6 +28,53 @@ interface SessionReplayProps {
 const LAP_SESSION_TYPES = new Set(["Race", "Sprint"]);
 const TIMING_SYNC_INTERVAL_MS = 100;
 
+function getTimingSectorBoundaries(
+  laps: Array<{
+    segments_sector_1?: (number | null)[] | null;
+    segments_sector_2?: (number | null)[] | null;
+    segments_sector_3?: (number | null)[] | null;
+  }>
+): [number, number] | null {
+  if (laps.length === 0) return null;
+
+  const freq: [Map<number, number>, Map<number, number>, Map<number, number>] = [
+    new Map(),
+    new Map(),
+    new Map(),
+  ];
+
+  for (const lap of laps) {
+    const rawS1Len = lap.segments_sector_1?.length ?? 0;
+    const s1HasLeadingNull = rawS1Len > 0 && lap.segments_sector_1?.[0] === null;
+    const lengths = [
+      s1HasLeadingNull ? rawS1Len - 1 : rawS1Len,
+      lap.segments_sector_2?.length ?? 0,
+      lap.segments_sector_3?.length ?? 0,
+    ];
+
+    for (let i = 0; i < 3; i++) {
+      if (lengths[i] > 0) {
+        freq[i].set(lengths[i], (freq[i].get(lengths[i]) ?? 0) + 1);
+      }
+    }
+  }
+
+  const sectorCounts = freq.map((map) => {
+    let bestLen = 0;
+    let bestCount = 0;
+    for (const [len, count] of map) {
+      if (count > bestCount) {
+        bestLen = len;
+        bestCount = count;
+      }
+    }
+    return bestLen;
+  }) as [number, number, number];
+
+  if (sectorCounts.some((count) => count <= 0)) return null;
+  return [sectorCounts[0], sectorCounts[0] + sectorCounts[1]];
+}
+
 export function SessionReplay({
   sessionKey,
   sessionType,
@@ -82,16 +129,7 @@ export function SessionReplay({
   const trackFlagStatus = useMemo(() => {
     const status: [string | null, string | null, string | null] = [null, null, null];
     const cutoff = new Date(replay.currentTime).toISOString();
-
-    // Find max mini-sector number to compute thirds
-    let maxMiniSector = 0;
-    for (const msg of raceControl) {
-      if (msg.scope === "Sector" && msg.sector != null && msg.sector > maxMiniSector) {
-        maxMiniSector = msg.sector;
-      }
-    }
-    const s1Boundary = Math.ceil(maxMiniSector / 3);
-    const s2Boundary = Math.ceil((maxMiniSector * 2) / 3);
+    const boundaries = getTimingSectorBoundaries(laps);
 
     let trackFlag: string | null = null;
     let hasStarted = false;
@@ -134,7 +172,8 @@ export function SessionReplay({
       }
 
       // Sector-scoped yellow flags
-      if (msg.scope === "Sector" && msg.sector != null && maxMiniSector > 0) {
+      if (msg.scope === "Sector" && msg.sector != null && boundaries) {
+        const [s1Boundary, s2Boundary] = boundaries;
         const timingSector =
           msg.sector <= s1Boundary ? 0 : msg.sector <= s2Boundary ? 1 : 2;
         if (msg.flag === "YELLOW" || msg.flag === "DOUBLE YELLOW") {
@@ -151,11 +190,11 @@ export function SessionReplay({
     }
 
     if (!hasStarted) {
-      return [null, null, null];
+      return [null, null, null] as [string | null, string | null, string | null];
     }
 
     return status;
-  }, [raceControl, replay.currentTime]);
+  }, [raceControl, replay.currentTime, laps]);
 
   // Throttled time reporting to parent (~10 updates/sec for sidebar sync)
   // Uses trailing-edge fallback so the latest value is always delivered,
