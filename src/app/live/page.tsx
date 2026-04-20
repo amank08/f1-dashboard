@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
+import { useState, useEffect, useMemo, useCallback, Suspense, type ComponentType } from "react";
 import { useSearchParams } from "next/navigation";
 import { isPast, isFuture, parseISO } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
+import { Thermometer, Droplets, Wind, CloudRain } from "lucide-react";
 import { useMeetings } from "@/lib/hooks/use-meetings";
 import { useSessions, useSession } from "@/lib/hooks/use-sessions";
 import { usePositions } from "@/lib/hooks/use-positions";
@@ -13,6 +14,7 @@ import { useLaps } from "@/lib/hooks/use-laps";
 import { useDrivers } from "@/lib/hooks/use-drivers";
 import { useRaceControl } from "@/lib/hooks/use-race-control";
 import { usePitStops } from "@/lib/hooks/use-pit-stops";
+import { useWeather } from "@/lib/hooks/use-weather";
 import { PageHeader } from "@/components/layout/page-header";
 import { SeasonSelector } from "@/components/selectors/season-selector";
 import { ResultsTable, buildResults } from "@/components/tables/results-table";
@@ -256,6 +258,35 @@ function SplitFlapText({ text }: { text: string }) {
   );
 }
 
+function WeatherStat({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="relative overflow-hidden rounded-lg border border-f1-border/70 bg-gradient-to-br from-f1-surface to-f1-bg/90 px-3 py-2.5">
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-0.5 bg-f1-accent/70" />
+      <div className="flex items-center gap-2.5">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-f1-bg/80 ring-1 ring-f1-border/60">
+          <Icon className="h-3.5 w-3.5 text-f1-text-secondary" />
+        </div>
+        <div className="min-w-0">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-f1-text-muted">
+          {label}
+          </div>
+          <div className="truncate text-[15px] font-semibold leading-none text-f1-text">
+            {value}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function findLatestCompletedSession(sessions: Session[]): Session | undefined {
   return sessions
@@ -405,6 +436,7 @@ export default function SessionAnalysisPage() {
   const { data: drivers, error: drvErr } = useDrivers(sessionKey);
   const { data: raceControl } = useRaceControl(sessionKey, isLiveSession);
   const { data: pitStops } = usePitStops(sessionKey);
+  const { data: weather } = useWeather(sessionKey, isLiveSession);
 
   // Filter out deleted lap times using race control messages.
   // Match by driver + lap time (seconds) rather than lap number, because
@@ -506,6 +538,21 @@ export default function SessionAnalysisPage() {
     }
     return getPhaseLabel(replayTime, replayPhases, laps) || null;
   }, [replayTime, laps, replayPhases, selectedSession?.session_type]);
+
+  const replayWeather = useMemo(() => {
+    if (!weather || weather.length === 0) return null;
+    if (replayTime == null) return weather[weather.length - 1] ?? null;
+
+    let latest = null;
+    for (const sample of weather) {
+      if (new Date(sample.date).getTime() <= replayTime) {
+        latest = sample;
+      } else {
+        break;
+      }
+    }
+    return latest ?? null;
+  }, [weather, replayTime]);
 
   const replayTrackStatusLabel = useMemo(
     () => getReplayTrackStatusLabel(raceControl, replayTime, laps),
@@ -737,40 +784,17 @@ export default function SessionAnalysisPage() {
 
       {/* Replay mode */}
       {sessionKey && viewMode === "replay" && !dataUnavailable && (
-        <div className="space-y-6">
-          <div className="space-y-6">
-            {/* Replay map — always first */}
-            <div className="space-y-4">
-              {drivers && laps ? (
-                <SessionReplay
-                  sessionKey={sessionKey}
-                  sessionType={selectedSession?.session_type ?? "Race"}
-                  drivers={drivers}
-                  laps={laps}
-                  raceControl={raceControl ?? []}
-                  onTimeChange={handleReplayTimeChange}
-                  timingEntries={replayTimingEntries}
-                  retiredDrivers={retiredDrivers}
-                />
-              ) : (
-                <div className="space-y-4">
-                  <Skeleton className="aspect-square w-full" />
-                  <Skeleton className="h-24" />
-                </div>
-              )}
-            </div>
-            {/* Timing board */}
-            <div className="space-y-4">
-              <div className="overflow-hidden rounded-lg border border-f1-border bg-f1-bg">
-                {(replayStatusLabel || replayTrackStatusLabel || latestReplayRaceControlHeadline) && (
-                  <div className="border-b border-f1-border bg-f1-surface">
-                    <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-3 sm:px-4">
+        <div className="space-y-6 lg:mx-[calc(50%-50vw)] lg:w-screen lg:px-6 xl:px-8 2xl:px-10">
+          <div className="rounded-lg border border-f1-border bg-f1-bg">
+            {(replayStatusLabel || replayTrackStatusLabel || latestReplayRaceControlHeadline) && (
+              <div className="border-b border-f1-border bg-f1-surface">
+                <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-3 sm:px-4">
                     <div className="flex min-w-0 items-center gap-3">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-f1-text-muted">
+                      <span className="text-xs font-semibold uppercase tracking-[0.14em] text-f1-text-muted">
                         Replay
                       </span>
                       {replayStatusLabel && (
-                        <span className="font-mono text-sm font-semibold text-f1-text sm:text-[15px]">
+                        <span className="inline-flex items-center rounded-full border border-f1-border/70 bg-f1-bg/55 px-3 py-1 text-sm font-semibold text-f1-text shadow-sm sm:text-[15px]">
                           {replayStatusLabel}
                         </span>
                       )}
@@ -780,13 +804,13 @@ export default function SessionAnalysisPage() {
                         <button
                           type="button"
                           onClick={() => setIsReplayRaceControlOpen((open) => !open)}
-                          className="flex min-h-[2rem] w-full items-center rounded-full border border-f1-border/80 bg-f1-bg/70 px-3 py-1.5 text-left text-xs text-f1-text shadow-sm transition-colors hover:border-f1-accent/40 hover:bg-f1-card/80"
+                          className="flex min-h-[2rem] w-full items-center rounded-full border border-f1-border/50 bg-f1-bg/35 px-3 py-1.5 text-left text-sm text-f1-text-secondary transition-colors hover:border-f1-border/70 hover:bg-f1-bg/55 hover:text-f1-text"
                         >
-                          <span className="mr-2 shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-f1-text-muted">
+                          <span className="mr-2 shrink-0 text-xs font-semibold uppercase tracking-[0.14em] text-f1-text-muted">
                             RC
                           </span>
                           <SplitFlapText text={latestReplayRaceControlHeadline} />
-                          <span className="ml-3 shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-f1-text-muted">
+                          <span className="ml-3 shrink-0 text-xs font-semibold uppercase tracking-[0.14em] text-f1-text-muted">
                             {isReplayRaceControlOpen ? "Hide" : "All"}
                           </span>
                         </button>
@@ -802,7 +826,7 @@ export default function SessionAnalysisPage() {
                             exit={{ opacity: 0, y: -6, scale: 0.96 }}
                             transition={{ duration: 0.2, ease: "easeOut" }}
                             className={cn(
-                              "inline-flex min-w-[8.75rem] items-center justify-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] sm:min-w-[10rem]",
+                              "inline-flex min-w-[8.75rem] items-center justify-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] sm:min-w-[10rem]",
                               replayTrackStatusLabel === "GREEN" && "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
                               replayTrackStatusLabel === "YELLOW" && "border-yellow-500/30 bg-yellow-500/10 text-yellow-200",
                               replayTrackStatusLabel === "VSC" && "border-blue-500/30 bg-blue-500/10 text-blue-200",
@@ -825,46 +849,49 @@ export default function SessionAnalysisPage() {
                         )}
                       </AnimatePresence>
                     </div>
-                  </div>
-                    <AnimatePresence initial={false}>
-                      {isReplayRaceControlOpen && replayRaceControlMessages.length > 0 && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.22, ease: "easeOut" }}
-                          className="overflow-hidden border-t border-f1-border/80"
-                        >
-                          <div className="max-h-72 space-y-2 overflow-y-auto px-3 py-3 sm:px-4">
-                            {replayRaceControlMessages.map((message) => {
-                              const headline = getReplayRaceControlHeadline(message);
-                              if (!headline) return null;
+                </div>
+                <AnimatePresence initial={false}>
+                  {isReplayRaceControlOpen && replayRaceControlMessages.length > 0 && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.22, ease: "easeOut" }}
+                      className="overflow-hidden border-t border-f1-border/80"
+                    >
+                      <div className="max-h-72 space-y-2 overflow-y-auto px-3 py-3 sm:px-4">
+                        {replayRaceControlMessages.map((message) => {
+                          const headline = getReplayRaceControlHeadline(message);
+                          if (!headline) return null;
 
-                              return (
-                                <div
-                                  key={`${message.date}-${message.message}-${message.driver_number ?? "track"}`}
-                                  className="rounded-lg border border-f1-border/70 bg-f1-bg/70 px-3 py-2"
-                                >
-                                  <div className="mb-1 flex items-center justify-between gap-3">
-                                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-f1-text-muted">
-                                      {formatRaceControlTimestamp(message.date)}
-                                    </span>
-                                    <span className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-f1-text-muted">
-                                      {[message.category, message.flag ?? message.scope].filter(Boolean).join(" · ")}
-                                    </span>
-                                  </div>
-                                  <div className="text-sm text-f1-text">
-                                    {headline}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                )}
+                          return (
+                            <div
+                              key={`${message.date}-${message.message}-${message.driver_number ?? "track"}`}
+                              className="rounded-lg border border-f1-border/70 bg-f1-bg/70 px-3 py-2"
+                            >
+                              <div className="mb-1 flex items-center justify-between gap-3">
+                                <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-f1-text-muted">
+                                  {formatRaceControlTimestamp(message.date)}
+                                </span>
+                                <span className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-f1-text-muted">
+                                  {[message.category, message.flag ?? message.scope].filter(Boolean).join(" · ")}
+                                </span>
+                              </div>
+                              <div className="text-sm text-f1-text">
+                                {headline}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+            <div className="grid lg:grid-cols-[max-content_minmax(36rem,1fr)] lg:items-start">
+              {/* Timing board */}
+              <div className="min-w-0 overflow-x-auto border-b border-f1-border lg:border-b-0 lg:border-r">
                 {dataLoading ? (
                   <div className="space-y-2 p-4">
                     {Array.from({ length: 20 }).map((_, i) => (
@@ -881,6 +908,72 @@ export default function SessionAnalysisPage() {
                     embedded
                   />
                 )}
+              </div>
+              {/* Replay map */}
+              <div className="min-w-0 lg:min-w-[36rem] lg:self-start">
+                <div className="border-b border-f1-border bg-f1-surface px-3 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-f1-text-muted sm:px-4">
+                  Track Map
+                </div>
+                <div className="px-3 py-0 sm:px-4 sm:py-0">
+                {drivers && laps ? (
+                  <div className="space-y-3">
+                    <SessionReplay
+                      sessionKey={sessionKey}
+                      sessionType={selectedSession?.session_type ?? "Race"}
+                      drivers={drivers}
+                      laps={laps}
+                      raceControl={raceControl ?? []}
+                      onTimeChange={handleReplayTimeChange}
+                      timingEntries={replayTimingEntries}
+                      retiredDrivers={retiredDrivers}
+                    />
+                    {replayWeather && (
+                      <div className="overflow-hidden rounded-xl border border-f1-border bg-[linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
+                        <div className="flex items-center justify-between border-b border-f1-border/80 bg-f1-surface/85 px-3 py-2.5">
+                          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-f1-text-muted">
+                            Weather
+                          </div>
+                          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-f1-text-muted">
+                            Replay Sync
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-5 gap-2 p-3">
+                          <WeatherStat
+                            icon={Thermometer}
+                            label="Air"
+                            value={`${replayWeather.air_temperature.toFixed(1)}°C`}
+                          />
+                          <WeatherStat
+                            icon={Thermometer}
+                            label="Track"
+                            value={`${replayWeather.track_temperature.toFixed(1)}°C`}
+                          />
+                          <WeatherStat
+                            icon={Droplets}
+                            label="Humidity"
+                            value={`${replayWeather.humidity.toFixed(0)}%`}
+                          />
+                          <WeatherStat
+                            icon={Wind}
+                            label="Wind"
+                            value={`${replayWeather.wind_speed.toFixed(1)} m/s`}
+                          />
+                          <WeatherStat
+                            icon={CloudRain}
+                            label="Rain"
+                            value={replayWeather.rainfall > 0 ? "Wet" : "Dry"}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <Skeleton className="aspect-square w-full" />
+                    <Skeleton className="h-24" />
+                  </div>
+                )}
+                </div>
               </div>
             </div>
           </div>

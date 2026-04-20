@@ -38,7 +38,7 @@ export const ReplayMap = memo(function ReplayMap({
   const hasActiveFlag = trackFlagStatus?.some((f) => f !== null) ?? false;
 
   return (
-    <div className="relative w-full rounded-lg border border-f1-border bg-f1-surface p-2">
+    <div className="relative w-full">
       <svg
         viewBox={viewBox}
         className="h-full w-full"

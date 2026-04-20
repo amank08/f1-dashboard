@@ -1114,11 +1114,11 @@ function MiniSectorDotsGroup({ segments }: { segments: (number | null)[] }) {
   if (segments.length === 0) return null;
 
   return (
-    <div className="flex justify-center gap-0.5">
+    <div className="flex justify-center gap-1">
       {segments.map((seg, mi) => (
         <div
           key={mi}
-          className="h-1.5 w-1.5 rounded-full"
+          className="h-2 w-2 rounded-full ring-1 ring-black/15"
           style={{ backgroundColor: getSegmentColor(seg) }}
         />
       ))}
@@ -1141,10 +1141,10 @@ function SectorBreakdown({
 }) {
   if (isOut) {
     return (
-      <div className="flex items-start justify-center gap-1.5">
+      <div className="flex items-start justify-center gap-2">
         {[0, 1, 2].map((index) => (
-          <div key={index} className="flex min-w-0 flex-col items-center gap-1">
-            <span className="font-mono text-[10px] leading-none text-f1-text-muted">—</span>
+          <div key={index} className="flex min-w-0 flex-col items-center gap-1.5">
+            <span className="font-mono text-[11px] leading-none text-f1-text-muted">—</span>
             <MiniSectorDotsGroup segments={[]} />
           </div>
         ))}
@@ -1152,13 +1152,13 @@ function SectorBreakdown({
     );
   }
   return (
-    <div className="flex items-start justify-center gap-1.5">
+    <div className="flex items-start justify-center gap-2">
       {sectorTimes.map((value, index) => {
         const pb = index === 0 ? personalBest.s1 : index === 1 ? personalBest.s2 : personalBest.s3;
         const ob = index === 0 ? overallBest.s1 : index === 1 ? overallBest.s2 : overallBest.s3;
         return (
-          <div key={index} className="flex min-w-0 flex-col items-center gap-1">
-            <span className={cn("font-mono text-[10px] leading-none whitespace-nowrap", getSectorColor(value, pb, ob))}>
+          <div key={index} className="flex min-w-0 flex-col items-center gap-1.5">
+            <span className={cn("font-mono text-[12px] font-semibold leading-none whitespace-nowrap", getSectorColor(value, pb, ob))}>
               {value !== null ? value.toFixed(3) : "—"}
             </span>
             <MiniSectorDotsGroup segments={segments[index] ?? []} />
@@ -1235,8 +1235,8 @@ function RaceGapCell({
 }) {
   if (isOut) {
     return (
-      <div className="flex min-w-[5.5rem] flex-col items-center justify-center leading-none">
-        <span className="font-mono text-[13px] text-f1-text-muted">—</span>
+      <div className="flex min-w-[6.25rem] flex-col items-center justify-center leading-none">
+        <span className="font-mono text-[14px] text-f1-text-muted">—</span>
       </div>
     );
   }
@@ -1249,11 +1249,11 @@ function RaceGapCell({
       ? `STOP ${formatSeconds(pitStopTime)}`
       : (showRecentPitTime ? "PIT EXIT" : "PIT");
     const secondaryClassName = pitStopTime != null
-      ? "font-mono text-[11px] font-semibold text-f1-text"
-      : "font-mono text-[10px] text-f1-text-muted";
+      ? "text-[11px] font-medium text-f1-text-secondary"
+      : "text-[10px] font-medium uppercase tracking-[0.1em] text-f1-text-muted";
     return (
-      <div className="flex min-w-[5.5rem] flex-col items-center justify-center gap-1 leading-none">
-        <span className="font-mono text-[13px] font-semibold text-blue-400">
+      <div className="flex min-w-[6rem] flex-col items-center justify-center gap-0.5 leading-none">
+        <span className="font-mono text-[14px] font-semibold text-blue-300">
           {formatSeconds(primaryPitValue)}
         </span>
         <span className={secondaryClassName}>
@@ -1265,9 +1265,9 @@ function RaceGapCell({
 
   if (position === 1) {
     return (
-      <div className="flex min-w-[5.5rem] flex-col items-center justify-center leading-none">
-        <span className="font-mono text-[13px] font-semibold text-f1-text">LEADER</span>
-        <span className="mt-0.5 text-[9px] uppercase tracking-[0.12em] text-f1-text-muted">
+      <div className="flex min-w-[6rem] flex-col items-center justify-center leading-none">
+        <span className="font-mono text-[14px] font-semibold text-f1-text">LEADER</span>
+        <span className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-f1-text-muted">
           Gap
         </span>
       </div>
@@ -1278,16 +1278,16 @@ function RaceGapCell({
   const hasGap = gapToLeader != null;
 
   return (
-    <div className="flex min-w-[5.5rem] flex-col items-center justify-center gap-1 leading-none">
+    <div className="flex min-w-[6rem] flex-col items-center justify-center gap-0.5 leading-none">
       <span
         className={cn(
-          "font-mono text-[13px] font-semibold",
+          "font-mono text-[14px] font-semibold",
           isClosingToAhead ? "text-green-400" : "text-f1-text"
         )}
       >
         {hasInterval ? formatTimingValue(interval) : "—"}
       </span>
-      <span className="font-mono text-[10px] text-f1-text-secondary">
+      <span className="text-[11px] font-medium text-f1-text-secondary">
         {hasGap ? formatTimingValue(gapToLeader) : "—"}
       </span>
     </div>
@@ -1303,15 +1303,22 @@ function RaceLapTimesCell({
   bestLap: number | null;
   overallBest: number;
 }) {
+  const lastLapClassName =
+    lastLap !== null && lastLap === overallBest
+      ? "text-purple-400"
+      : lastLap !== null && bestLap !== null && lastLap === bestLap
+        ? "text-green-400"
+        : "text-f1-text";
+
   return (
-    <div className="flex min-w-[5.75rem] flex-col items-center justify-center gap-1 leading-none">
-      <span className="font-mono text-[13px] font-semibold text-f1-text">
+    <div className="flex min-w-[6.25rem] flex-col items-center justify-center gap-0.5 leading-none">
+      <span className={cn("font-mono text-[14px] font-semibold", lastLapClassName)}>
         {formatLapTime(lastLap)}
       </span>
       <span
         className={cn(
-          "font-mono text-[10px]",
-          bestLap !== null && bestLap === overallBest ? "text-purple-400" : "text-f1-text-muted"
+          "text-[11px] font-medium",
+          bestLap !== null && bestLap === overallBest ? "text-purple-400" : "text-f1-text-secondary"
         )}
       >
         {formatLapTime(bestLap)}
@@ -1323,7 +1330,7 @@ function RaceLapTimesCell({
 function PositionDeltaBadge({ delta }: { delta: number | null }) {
   if (delta == null || delta === 0) {
     return (
-      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-f1-text-muted">
+      <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-f1-text-muted">
         —
       </span>
     );
@@ -1333,7 +1340,7 @@ function PositionDeltaBadge({ delta }: { delta: number | null }) {
   return (
     <span
       className={cn(
-        "text-sm font-semibold tabular-nums",
+        "text-sm font-medium tabular-nums",
         isGain ? "text-green-400" : "text-red-400"
       )}
     >
@@ -1381,32 +1388,32 @@ export function TimingBoard({
   }
 
   const usesQualifyingStyleLayout = !!(isQualifying || isPractice);
-  const raceCellPadding = usesQualifyingStyleLayout ? "px-2 py-2" : "px-2 py-2";
-  const driverCellPadding = usesQualifyingStyleLayout ? "px-2 py-2" : "px-1.5 py-2";
-  const posCellPadding = usesQualifyingStyleLayout ? "px-2 py-2" : "px-2 py-2";
+  const raceCellPadding = usesQualifyingStyleLayout ? "px-0.5 py-2" : "px-0 py-2";
+  const driverCellPadding = usesQualifyingStyleLayout ? "px-0.5 py-2" : "px-0 py-2";
+  const posCellPadding = usesQualifyingStyleLayout ? "px-0.5 py-2" : "px-0 py-2";
 
   return (
     <div className={cn(
       "overflow-x-auto bg-f1-bg",
       embedded ? "" : "rounded-lg border border-f1-border"
     )}>
-      <table className="w-full text-sm">
+      <table className="w-max text-sm">
         <thead>
           <tr className="border-b border-f1-border bg-f1-surface text-xs font-semibold uppercase text-f1-text-muted">
-            <th className="sticky left-0 z-20 bg-f1-surface px-2 py-2.5 text-center w-10">Pos</th>
+            <th className="sticky left-0 z-20 bg-f1-surface px-0.5 py-2.5 text-center w-8">Pos</th>
             <th className={cn(
               "sticky left-10 z-20 bg-f1-surface py-2.5 text-left whitespace-nowrap",
-              usesQualifyingStyleLayout ? "px-2" : "w-[7.25rem] px-1.5"
+              usesQualifyingStyleLayout ? "px-0.5" : "w-[6.5rem] px-0"
             )}>Driver</th>
-            {usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center whitespace-nowrap">Best</th>}
-            {!usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center whitespace-nowrap">Gap / Int</th>}
-            <th className="px-2 py-2.5 text-center whitespace-nowrap">Sectors</th>
-            <th className="px-2 py-2.5 text-center whitespace-nowrap">
+            {usesQualifyingStyleLayout && <th className="px-0.5 py-2.5 text-center whitespace-nowrap">Best</th>}
+            {!usesQualifyingStyleLayout && <th className="px-0.5 py-2.5 text-center whitespace-nowrap">Gap / Int</th>}
+            <th className="px-0.5 py-2.5 text-center whitespace-nowrap">Sectors</th>
+            <th className="px-0.5 py-2.5 text-center whitespace-nowrap">
               {usesQualifyingStyleLayout ? "Last" : "Last / Best"}
             </th>
-            <th className="px-2 py-2.5 text-center w-10">Tire</th>
-            {!usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center w-10">Pit</th>}
-            {!usesQualifyingStyleLayout && <th className="px-2 py-2.5 text-center w-8">+/-</th>}
+            <th className="px-0.5 py-2.5 text-center w-8">Tire</th>
+            {!usesQualifyingStyleLayout && <th className="px-0.5 py-2.5 text-center w-8">Pit</th>}
+            {!usesQualifyingStyleLayout && <th className="px-0.5 py-2.5 text-center w-6">+/-</th>}
           </tr>
         </thead>
         <tbody>
@@ -1441,7 +1448,7 @@ export function TimingBoard({
                 <td className={cn(
                   "sticky left-10 z-10 group-hover:bg-f1-card transition-colors whitespace-nowrap",
                   driverCellPadding,
-                  !usesQualifyingStyleLayout && "w-[7.25rem]",
+                  !usesQualifyingStyleLayout && "w-[6.5rem]",
                   inKnockoutZone ? "bg-[#110813]" : "bg-f1-bg"
                 )}>
                   <div className={cn("flex items-center", usesQualifyingStyleLayout ? "gap-2" : "gap-1.5")}>
