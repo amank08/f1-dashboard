@@ -794,8 +794,10 @@ export default function SessionAnalysisPage() {
                         Replay
                       </span>
                       {replayStatusLabel && (
-                        <span className="inline-flex items-center rounded-full border border-f1-border/70 bg-f1-bg/55 px-3 py-1 text-sm font-semibold text-f1-text shadow-sm sm:text-[15px]">
-                          {replayStatusLabel}
+                        <span className="inline-flex items-center rounded-full border border-f1-border/70 bg-f1-bg/75 px-4 py-1.5 shadow-sm shadow-black/10">
+                          <span className="text-[15px] font-black tracking-[0.06em] text-f1-text sm:text-base">
+                            {replayStatusLabel}
+                          </span>
                         </span>
                       )}
                     </div>
