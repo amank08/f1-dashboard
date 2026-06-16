@@ -75,7 +75,7 @@ export default function CalendarPage() {
               <div
                 key={meeting.meeting_key}
                 className={cn(
-                  "rounded-xl border bg-f1-surface transition-all",
+                  "surface-sheen rounded-lg border bg-f1-surface/84 shadow-lg shadow-black/10 transition-all hover:-translate-y-0.5 hover:bg-f1-card",
                   isOngoing
                     ? "border-f1-accent/60 shadow-sm shadow-f1-accent/10"
                     : isPastRace

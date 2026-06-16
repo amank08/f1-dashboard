@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import { useEffect, useMemo, useRef } from "react";
+import gsap from "gsap";
 import { motion } from "framer-motion";
 import type { Driver, Position, Interval, Stint, LapData, RaceControlMessage, PitStop } from "@/lib/openf1/types";
 import { getTeamColor, getTeamLogoUrl, getTeamLogoStyle } from "@/lib/utils/colors";
@@ -1364,6 +1366,83 @@ export function TimingBoard({
   knockoutPosition?: number;
   embedded?: boolean;
 }) {
+  const tableShellRef = useRef<HTMLDivElement | null>(null);
+  const previousRowSignatures = useRef<Map<number, string> | null>(null);
+  const previousRowPositions = useRef<Map<number, number> | null>(null);
+
+  const rowSignatures = useMemo(() => {
+    return new Map(
+      entries.map((entry) => [
+        entry.driverNumber,
+        [
+          entry.position,
+          entry.interval,
+          entry.gapToLeader,
+          entry.lastLap,
+          entry.bestLap,
+          entry.currentLap,
+          entry.pitCount,
+          entry.isInPit,
+          entry.hasTakenChequered,
+          entry.sectorTimes.join("/"),
+          entry.segments.map((sector) => sector.join(".")).join("|"),
+        ].join("::"),
+      ])
+    );
+  }, [entries]);
+
+  useEffect(() => {
+    const shell = tableShellRef.current;
+    if (!shell) return;
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const previousSignatures = previousRowSignatures.current;
+    const previousPositions = previousRowPositions.current;
+
+    if (!previousSignatures || reduceMotion.matches) {
+      previousRowSignatures.current = rowSignatures;
+      previousRowPositions.current = new Map(entries.map((entry) => [entry.driverNumber, entry.position]));
+      return;
+    }
+
+    const context = gsap.context(() => {
+      for (const entry of entries) {
+        if (previousSignatures.get(entry.driverNumber) === rowSignatures.get(entry.driverNumber)) {
+          continue;
+        }
+
+        const row = shell.querySelector<HTMLTableRowElement>(`[data-driver-number="${entry.driverNumber}"]`);
+        if (!row) continue;
+
+        const previousPosition = previousPositions?.get(entry.driverNumber);
+        const hasGained = previousPosition != null && entry.position < previousPosition;
+        const cells = Array.from(row.children);
+        const accent = hasGained ? "rgba(0, 210, 190, 0.2)" : "rgba(79, 143, 255, 0.18)";
+
+        gsap.fromTo(
+          cells,
+          {
+            backgroundColor: accent,
+            x: hasGained ? -8 : 8,
+          },
+          {
+            backgroundColor: "rgba(5, 5, 16, 0)",
+            x: 0,
+            duration: 0.8,
+            ease: "power3.out",
+            stagger: 0.015,
+            clearProps: "backgroundColor,x",
+          }
+        );
+      }
+    }, shell);
+
+    previousRowSignatures.current = rowSignatures;
+    previousRowPositions.current = new Map(entries.map((entry) => [entry.driverNumber, entry.position]));
+
+    return () => context.revert();
+  }, [entries, rowSignatures]);
+
   if (entries.length === 0) {
     return (
       <div className={cn(
@@ -1396,7 +1475,7 @@ export function TimingBoard({
     <div className={cn(
       "overflow-x-auto bg-f1-bg",
       embedded ? "" : "rounded-lg border border-f1-border"
-    )}>
+    )} ref={tableShellRef}>
       <table className="w-max text-sm">
         <thead>
           <tr className="border-b border-f1-border bg-f1-surface text-xs font-semibold uppercase text-f1-text-muted">
@@ -1429,6 +1508,7 @@ export function TimingBoard({
             return (
               <motion.tr
                 key={entry.driverNumber}
+                data-driver-number={entry.driverNumber}
                 layout="position"
                 transition={{ type: "spring", damping: 25, stiffness: 200 }}
                 className={cn(

@@ -53,16 +53,16 @@ export default function StandingsPage() {
       />
 
       {/* Tab switcher */}
-      <div className="flex gap-1 rounded-lg border border-f1-border bg-f1-surface p-1 w-fit">
+      <div className="flex w-fit gap-1 rounded-full border border-f1-border bg-f1-surface/80 p-1 shadow-lg shadow-black/10">
         {(["drivers", "constructors"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={cn(
-              "px-4 py-1.5 rounded-md text-sm font-semibold capitalize transition-colors",
+              "rounded-full px-4 py-1.5 text-sm font-semibold capitalize transition-all",
               tab === t
-                ? "bg-f1-accent text-white"
-                : "text-f1-text-secondary hover:text-f1-text"
+                ? "bg-f1-text text-f1-bg"
+                : "text-f1-text-secondary hover:bg-white/[0.05] hover:text-f1-text"
             )}
           >
             {t === "drivers" ? "Drivers" : "Constructors"}
@@ -86,7 +86,7 @@ export default function StandingsPage() {
 
       {/* Driver standings table */}
       {tab === "drivers" && drivers && drivers.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-f1-border">
+        <div className="overflow-hidden rounded-lg border border-f1-border bg-f1-surface/80 shadow-xl shadow-black/10">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-f1-border bg-f1-surface text-xs font-semibold uppercase tracking-wide text-f1-text-secondary">
@@ -160,7 +160,7 @@ export default function StandingsPage() {
 
       {/* Constructor standings table */}
       {tab === "constructors" && constructors && constructors.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-f1-border">
+        <div className="overflow-hidden rounded-lg border border-f1-border bg-f1-surface/80 shadow-xl shadow-black/10">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-f1-border bg-f1-surface text-xs font-semibold uppercase tracking-wide text-f1-text-secondary">

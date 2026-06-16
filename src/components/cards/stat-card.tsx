@@ -14,16 +14,16 @@ export function StatCard({
   return (
     <div
       className={cn(
-        "rounded-xl border border-f1-border bg-f1-surface p-4",
+        "linear-surface surface-sheen rounded-2xl p-4 transition duration-300 ease-premium hover:-translate-y-0.5",
         className
       )}
     >
-      <p className="text-xs font-semibold uppercase tracking-wider text-f1-text-muted">
+      <p className="relative z-10 text-xs font-semibold uppercase tracking-[0.16em] text-f1-text-muted">
         {label}
       </p>
-      <p className="mt-1 text-2xl font-bold">{value}</p>
+      <p className="relative z-10 mt-2 text-2xl font-semibold tracking-normal text-f1-text">{value}</p>
       {sublabel && (
-        <p className="mt-0.5 text-sm text-f1-text-secondary">{sublabel}</p>
+        <p className="relative z-10 mt-1 text-sm text-f1-text-secondary">{sublabel}</p>
       )}
     </div>
   );

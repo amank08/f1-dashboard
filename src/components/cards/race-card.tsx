@@ -21,20 +21,20 @@ export function RaceCard({ meeting }: { meeting: Meeting }) {
   const endDate = parseISO(meeting.date_end);
 
   return (
-    <Link href={`/calendar/${meeting.meeting_key}`}>
-      <div className="group rounded-xl border border-f1-border bg-f1-surface p-5 transition-all hover:border-f1-accent/40 hover:bg-f1-card">
-        <div className="flex items-start justify-between">
+    <Link href={`/calendar/${meeting.meeting_key}`} className="premium-focus block rounded-2xl">
+      <div className="linear-surface group rounded-2xl p-5 transition duration-300 ease-premium hover:-translate-y-1">
+        <div className="relative z-10 flex items-start justify-between">
           <Badge variant={status.variant}>{status.label}</Badge>
           <span className="text-xs text-f1-text-muted">
             R{meeting.meeting_key}
           </span>
         </div>
 
-        <h3 className="mt-3 text-lg font-bold leading-tight group-hover:text-f1-accent transition-colors">
+        <h3 className="relative z-10 mt-4 text-lg font-semibold leading-tight text-f1-text transition-colors duration-300 ease-premium group-hover:text-f1-accent">
           {meeting.meeting_name}
         </h3>
 
-        <div className="mt-3 flex flex-col gap-1.5 text-sm text-f1-text-secondary">
+        <div className="relative z-10 mt-3 flex flex-col gap-1.5 text-sm text-f1-text-secondary">
           <div className="flex items-center gap-2">
             <MapPin size={14} className="text-f1-text-muted" />
             <span>
@@ -49,7 +49,7 @@ export function RaceCard({ meeting }: { meeting: Meeting }) {
           </div>
         </div>
 
-        <div className="mt-3 text-xs font-semibold text-f1-text-muted">
+        <div className="relative z-10 mt-4 border-t border-white/[0.06] pt-3 text-xs font-semibold uppercase tracking-[0.14em] text-f1-text-muted">
           {meeting.circuit_short_name}
         </div>
       </div>
